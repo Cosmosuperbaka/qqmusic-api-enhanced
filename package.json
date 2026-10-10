@@ -1,6 +1,6 @@
 {
   "name": "qqmusic-api-enhanced",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "QQ音乐增强版API，支持扫码登录/凭证刷新/直链提取/歌词解密/歌单歌手检索 || QQ Music Enhanced API for Node.js & Bun",
   "type": "module",
   "main": "main.js",

@@ -7,7 +7,7 @@ export interface NormalizedVipInfo {
     vipExpireTime?: number;
 }
 export declare function parseVipFromIcons(iconList?: any[], icons?: any[]): Partial<NormalizedVipInfo> | null;
-export declare function deriveVipInfo(body: any): NormalizedVipInfo;
+export declare function deriveVipInfo(body: any, now?: number): NormalizedVipInfo;
 /**
  * 获取当前登录用户的 VIP 会员信息及身份明细.
  *
