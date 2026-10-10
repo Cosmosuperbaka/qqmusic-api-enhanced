@@ -1,0 +1,39 @@
+{
+  "name": "qqmusic-api-enhanced",
+  "version": "1.0.1",
+  "description": "QQ音乐增强版API，支持扫码登录/凭证刷新/直链提取/歌词解密/歌单歌手检索 || QQ Music Enhanced API for Node.js & Bun",
+  "type": "module",
+  "main": "main.js",
+  "types": "interface.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test"
+  },
+  "keywords": [
+    "qqmusic",
+    "qq-music",
+    "qq音乐",
+    "api",
+    "music"
+  ],
+  "author": "BakaGame",
+  "license": "MIT",
+  "files": [
+    "module",
+    "util",
+    "main.js",
+    "main.ts",
+    "interface.d.ts",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/ws": "^8.18.2",
+    "bun-types": "^1.4.3",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "mqtt": "^5.16.0",
+    "ws": "^8.22.0"
+  }
+}
