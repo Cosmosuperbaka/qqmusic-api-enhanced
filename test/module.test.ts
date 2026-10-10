@@ -262,15 +262,39 @@ describe("业务模块调度与 Mock 契约验证", () => {
     expect(badgeVip.vipLevel).toBe(6);
     expect(badgeVip.vipYear).toBe(true);
 
-    // 验证账号存在已过期 SVIP (如 2025/9/12) 但有未过期年费绿钻时：
-    // 正确降级为 vip 并清除过期的旧到期时间
-    const expiredSvipWithActiveVipData = {
+    // 验证账号存在已过期 SVIP (2025/9/12) 与未过期年费绿钻 (HugeVipEnd: 2027/9/12) 时：
+    // 正确降级为 vip，且必须展示未过期的有效绿钻到期时间，不得隐藏
+    const expiredSvipWithActiveVipEndData = {
       svip: 1,
+      starend: "2025-09-12 00:00:00",
       userinfo: {
-        expire: 1757635200, // 2025-09-12 (以当前 2026 年判定为已过期)
+        expire: 1757635200, // 2025-09-12 (SVIP 已过期)
       },
       identity: {
         HugeVip: 1,
+        level: 6,
+        HugeYearFlag: 1,
+        HugeVipEnd: "2027-09-12 00:00:00", // 豪华绿钻未过期
+      },
+    };
+    const testNow = Date.parse("2026-10-11T00:00:00Z");
+    const downgradedWithDate = deriveVipInfo(expiredSvipWithActiveVipEndData, testNow);
+    expect(downgradedWithDate.vipStatus).toBe("vip");
+    expect(downgradedWithDate.vipTier).toBe("vip");
+    expect(downgradedWithDate.vipLevel).toBe(6);
+    expect(downgradedWithDate.vipYear).toBe(true);
+    expect(downgradedWithDate.vipExpireTime).toBe(Date.parse("2027/09/12 00:00:00"));
+
+    // 验证若 SVIP 与绿钻两者均已过期（如均为 2025 年），但主页佩戴有勋章兜底时：
+    // 降级为 vip，过期的失效时间被安全清除为 undefined
+    const allExpiredWithBadgeData = {
+      svip: 1,
+      userinfo: {
+        expire: 1757635200,
+      },
+      identity: {
+        HugeVip: 1,
+        HugeVipEnd: "2025-09-12 00:00:00",
         level: 6,
         HugeYearFlag: 1,
       },
@@ -285,14 +309,12 @@ describe("业务模块调度与 Mock 契约验证", () => {
         },
       },
     };
-    // 假设当前时间为 2026-10-11
-    const testNow = Date.parse("2026-10-11T00:00:00Z");
-    const downgraded = deriveVipInfo(expiredSvipWithActiveVipData, testNow);
-    expect(downgraded.vipStatus).toBe("vip");
-    expect(downgraded.vipTier).toBe("vip");
-    expect(downgraded.vipLevel).toBe(6);
-    expect(downgraded.vipYear).toBe(true);
-    expect(downgraded.vipExpireTime).toBeUndefined(); // 过期的 SVIP 截止时间已被安全清除
+    const allExpired = deriveVipInfo(allExpiredWithBadgeData, testNow);
+    expect(allExpired.vipStatus).toBe("vip");
+    expect(allExpired.vipTier).toBe("vip");
+    expect(allExpired.vipLevel).toBe(6);
+    expect(allExpired.vipYear).toBe(true);
+    expect(allExpired.vipExpireTime).toBeUndefined();
   });
 
 

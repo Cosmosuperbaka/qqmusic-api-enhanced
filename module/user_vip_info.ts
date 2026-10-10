@@ -53,6 +53,24 @@ export function parseVipFromIcons(iconList: any[] = [], icons: any[] = []): Part
   return null;
 }
 
+function parseDateMs(val: any): number | undefined {
+  if (val === undefined || val === null || val === "" || val === 0) return undefined;
+  if (typeof val === "number" && val > 0) {
+    return val > 1e11 ? val : val * 1000;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed) return undefined;
+    const num = Number(trimmed);
+    if (!isNaN(num) && num > 0) {
+      return num > 1e11 ? num : num * 1000;
+    }
+    const parsed = Date.parse(trimmed.replace(/-/g, "/"));
+    if (!isNaN(parsed)) return parsed;
+  }
+  return undefined;
+}
+
 export function deriveVipInfo(body: any, now = Date.now()): NormalizedVipInfo {
   if (!body) {
     return { vipStatus: "unknown" };
@@ -67,26 +85,28 @@ export function deriveVipInfo(body: any, now = Date.now()): NormalizedVipInfo {
     Number(vipData.ystar || vipData.year || 0) > 0
   );
 
-  // 解析各个可能的过期时间
-  const expireTs = Number(vipData.userinfo?.expire || 0);
-  let parsedExpire: number | undefined = undefined;
-  if (expireTs > 0) {
-    parsedExpire = expireTs * 1000;
-  } else if (identity.HugeVipEnd) {
-    const parsed = Date.parse(identity.HugeVipEnd);
-    if (!isNaN(parsed)) parsedExpire = parsed;
-  } else if (identity.twelveEnd) {
-    const parsed = Date.parse(identity.twelveEnd);
-    if (!isNaN(parsed)) parsedExpire = parsed;
-  } else if (vipData.starend) {
-    const parsed = Date.parse(vipData.starend);
-    if (!isNaN(parsed)) parsedExpire = parsed;
-  } else if (vipData.ystarend) {
-    const parsed = Date.parse(vipData.ystarend);
-    if (!isNaN(parsed)) parsedExpire = parsed;
+  // 1. 分别提取 SVIP 专有到期时间
+  let svipExpire: number | undefined = undefined;
+  if (vipData.starend) svipExpire = parseDateMs(vipData.starend);
+  else if (vipData.ystarend) svipExpire = parseDateMs(vipData.ystarend);
+  else if (identity.SvipEnd || identity.svip_end) svipExpire = parseDateMs(identity.SvipEnd || identity.svip_end);
+  else if (svip > 0 && Number(vipData.userinfo?.expire || 0) > 0) {
+    svipExpire = parseDateMs(vipData.userinfo.expire);
   }
 
-  const isExpired = parsedExpire !== undefined && parsedExpire <= now;
+  // 2. 分别提取普通 VIP / 豪华绿钻专有到期时间
+  let vipExpire: number | undefined = undefined;
+  if (identity.HugeVipEnd) vipExpire = parseDateMs(identity.HugeVipEnd);
+  else if (identity.twelveEnd) vipExpire = parseDateMs(identity.twelveEnd);
+  else if (identity.eightEnd) vipExpire = parseDateMs(identity.eightEnd);
+  else if (identity.overdate) vipExpire = parseDateMs(identity.overdate);
+  else if (vipData.mygreen) vipExpire = parseDateMs(vipData.mygreen);
+  else if (svip === 0 && Number(vipData.userinfo?.expire || 0) > 0) {
+    vipExpire = parseDateMs(vipData.userinfo.expire);
+  }
+
+  const isSvipExpired = svipExpire !== undefined && svipExpire <= now;
+  const isVipExpired = vipExpire !== undefined && vipExpire <= now;
 
   let vipStatus: "vip" | "nonVip" | "unknown" = "nonVip";
   let vipTier: "svip" | "vip" | undefined = undefined;
@@ -95,23 +115,23 @@ export function deriveVipInfo(body: any, now = Date.now()): NormalizedVipInfo {
   let vipExpireTime: number | undefined = undefined;
 
   // 1. 如果存在未过期的 SVIP
-  if (svip > 0 && !isExpired) {
+  if (svip > 0 && !isSvipExpired) {
     vipStatus = "vip";
     vipTier = "svip";
     vipLevel = level > 0 ? Math.min(Math.max(level, 1), 10) : 1;
     vipYear = isYear;
-    vipExpireTime = parsedExpire;
-  } else if (isVip > 0) {
-    // 2. 如果存在普通 VIP（若 svip 已过期但 isVip 存在，降级为未过期 VIP）
+    vipExpireTime = svipExpire ?? (vipExpire && !isVipExpired ? vipExpire : undefined);
+  } else if (isVip > 0 && !isVipExpired) {
+    // 2. 如果存在普通 VIP（若 SVIP 已过期但 VIP 未过期，降级并展示未过期的 VIP 到期时间）
     vipStatus = "vip";
     vipTier = "vip";
     vipLevel = level > 0 ? Math.min(Math.max(level, 1), 10) : 1;
     vipYear = isYear;
-    vipExpireTime = isExpired ? undefined : parsedExpire;
+    vipExpireTime = vipExpire ?? (svipExpire && !isSvipExpired ? svipExpire : undefined);
   }
 
-  // 3. 若基本 identity 未命中有效 VIP，或虽推导为 SVIP 但已过期，从附加的 Info / NewIconInfo / Icons 解析当前活跃佩戴勋章
-  if (vipStatus === "nonVip" || (vipTier === "svip" && isExpired)) {
+  // 3. 若 identity 未命中有效 VIP（例如 SVIP 已过期，且普通 VIP 缺少基础标志或需通过勋章校准）
+  if (vipStatus === "nonVip") {
     const info = vipData.Info || vipData.info || {};
     const iconList = info.NewIconInfo?.iconlist || vipData.NewIconInfo?.iconlist || [];
     const icons = info.Icons || vipData.Icons || [];
@@ -121,18 +141,18 @@ export function deriveVipInfo(body: any, now = Date.now()): NormalizedVipInfo {
       vipTier = iconVip.vipTier;
       vipLevel = iconVip.vipLevel;
       vipYear = iconVip.vipYear;
-      vipExpireTime = isExpired ? undefined : (vipExpireTime ?? iconVip.vipExpireTime);
+      if (iconVip.vipTier === "vip" && vipExpire && vipExpire > now) {
+        vipExpireTime = vipExpire;
+      } else if (iconVip.vipTier === "svip" && svipExpire && svipExpire > now) {
+        vipExpireTime = svipExpire;
+      } else {
+        vipExpireTime = undefined;
+      }
     }
   }
 
-  // 4. 若最终状态仍为已过期且无未过期档位，重置为 nonVip 并清除过期时间
-  if (isExpired && vipTier === "svip") {
-    vipStatus = "nonVip";
-    vipTier = undefined;
-    vipLevel = undefined;
-    vipYear = undefined;
-    vipExpireTime = undefined;
-  } else if (isExpired && vipExpireTime && vipExpireTime <= now) {
+  // 4. 严苛防线：任何已过期的到期时间绝对不允许外露
+  if (vipExpireTime !== undefined && vipExpireTime <= now) {
     vipExpireTime = undefined;
   }
 
