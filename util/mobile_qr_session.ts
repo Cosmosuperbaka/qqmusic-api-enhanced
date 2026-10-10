@@ -5,7 +5,8 @@ import { requestCgi } from "./request.js";
 import { cookieToString, parseSetCookie } from "./cookie.js";
 
 // Polyfill ws.createWebSocketStream for Bun runtime
-if (typeof (ws as any).createWebSocketStream !== "function") {
+const isBun = typeof (globalThis as any).Bun !== "undefined";
+if (isBun || typeof (ws as any).createWebSocketStream !== "function") {
   (ws as any).createWebSocketStream = function (socket: any) {
     const duplex = new Duplex({
       read() {},
@@ -38,6 +39,13 @@ const mobileSessions = new Map<string, MobileLoginState>();
 
 export function registerMobileSession(qrcodeId: string) {
   if (!qrcodeId) return;
+
+  const existing = mobileSessions.get(qrcodeId);
+  if (existing && existing.code === 200) return;
+  if (existing && Date.now() - existing.createdAt < 120_000 && existing.client && !existing.client.disconnected) {
+    return;
+  }
+
   const now = Date.now();
   for (const [key, s] of mobileSessions.entries()) {
     if (now - s.createdAt > 300_000) {
@@ -122,27 +130,39 @@ export function registerMobileSession(qrcodeId: string) {
           } catch {}
         } else if (type === "cookies") {
           const cookies = payload?.cookies || {};
-          const uin = cookies.qqmusic_uin?.value;
-          const key = cookies.qqmusic_key?.value;
+          const uin = cookies.qqmusic_uin?.value || cookies.uin?.value || payload?.uin;
+          const key = cookies.qqmusic_key?.value || cookies.qm_keyst?.value || payload?.musickey;
           if (uin && key) {
-            const loginRes = await requestCgi(
-              "music.login.LoginServer",
-              "Login",
-              {
-                musicid: Number(uin),
-                qrCodeID: qrcodeId,
-                token: String(key),
-              },
-              { platform: "android" },
-            );
-            const resultCookies = parseSetCookie(loginRes.cookie || []);
+            let resultCookies: Record<string, string> = {};
+            try {
+              const loginRes = await requestCgi(
+                "music.login.LoginServer",
+                "Login",
+                {
+                  musicid: Number(uin),
+                  qrCodeID: qrcodeId,
+                  token: String(key),
+                },
+                { platform: "android" },
+              );
+              resultCookies = parseSetCookie(loginRes.cookie || []);
+            } catch {}
+
             const cookieObj: Record<string, string> = {
               uin: String(uin),
               qqmusic_uin: String(uin),
               qm_keyst: String(key),
               qqmusic_key: String(key),
-              ...resultCookies,
             };
+
+            for (const [cookieName, cookieItem] of Object.entries(cookies as Record<string, any>)) {
+              if (cookieItem && typeof cookieItem.value === "string") {
+                cookieObj[cookieName] = cookieItem.value;
+              }
+            }
+
+            Object.assign(cookieObj, resultCookies);
+
             state.code = 200;
             state.message = "登录成功";
             state.uin = String(uin);

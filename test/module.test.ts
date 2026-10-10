@@ -231,6 +231,8 @@ describe("业务模块调度与 Mock 契约验证", () => {
 
   it("login_qr_check 支持 mobile App 扫码分支", async () => {
     const login_qr_check_mod = (await import("../module/login_qr_check.js")).default;
+    const { registerMobileSession, getMobileSession } = await import("../util/mobile_qr_session.js");
+
     const missingRes = await login_qr_check_mod({ type: "mobile" });
     expect(missingRes.status).toBe(400);
     expect(missingRes.body.message).toContain("缺少必要参数 qrcodeID");
@@ -243,6 +245,23 @@ describe("业务模块调度与 Mock 契约验证", () => {
     const waitingRes = await login_qr_check_mod({ type: "mobile", qrcodeID: "test_qr_123" }, mockReq as any);
     expect(waitingRes.status).toBe(200);
     expect(waitingRes.body.code).toBe(801);
+
+    // 验证实时会话状态注入响应
+    registerMobileSession("test_qr_auth");
+    const session = getMobileSession("test_qr_auth");
+    if (session) {
+      session.code = 200;
+      session.uin = "12345678";
+      session.musickey = "test_musickey_val";
+      session.cookieStr = "uin=12345678; qm_keyst=test_musickey_val";
+    }
+
+    const authRes = await login_qr_check_mod({ type: "mobile", qrcodeID: "test_qr_auth" }, mockReq as any);
+    expect(authRes.status).toBe(200);
+    expect(authRes.body.code).toBe(200);
+    expect(authRes.body.uin).toBe("12345678");
+    expect(authRes.body.musickey).toBe("test_musickey_val");
+    expect(authRes.body.cookieStr).toContain("qm_keyst=test_musickey_val");
   });
 });
 

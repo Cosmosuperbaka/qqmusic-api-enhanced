@@ -1,6 +1,7 @@
 import { request, requestCgi } from "../util/request.js";
 import { getGtk, getGuid } from "../util/crypto.js";
 import { cookieToString, parseSetCookie } from "../util/cookie.js";
+import { getMobileSession, registerMobileSession } from "../util/mobile_qr_session.js";
 /**
  * 轮询检查二维码登录状态.
  *
@@ -147,65 +148,102 @@ export default async function login_qr_check(query = {}, req = request) {
                 body: { code: 400, message: "缺少必要参数 qrcodeID" },
             };
         }
-        const cgiRes = await requestCgi("music.login.LoginServer", "CheckQRCode", {
-            qrcodeID,
-            tmeAppID: "qqmusic",
-        }, {
-            platform: "android",
-        });
-        const cgiBody = (cgiRes.body || {});
-        const code = cgiBody.code;
-        if (code === 40000) {
-            return {
-                status: 200,
-                body: { code: 801, message: "等待 QQ 音乐 App 扫码" },
-            };
+        // 1. 确保后台 MQTT 会话已启动
+        let session = getMobileSession(qrcodeID);
+        if (!session) {
+            try {
+                registerMobileSession(qrcodeID);
+            }
+            catch { }
+            session = getMobileSession(qrcodeID);
         }
-        if (code === 40001) {
-            return {
-                status: 200,
-                body: { code: 802, message: "已扫码，等待确认" },
-            };
-        }
-        if (code === 40002) {
-            return {
-                status: 200,
-                body: { code: 800, message: "二维码已过期，请刷新" },
-            };
-        }
-        if (code === 0) {
-            const cookies = cgiRes.cookie || [];
-            const cookieObj = parseSetCookie(cookies);
-            if (cgiBody.musicid && !cookieObj.uin)
-                cookieObj.uin = String(cgiBody.musicid);
-            if (cgiBody.musickey && !cookieObj.qm_keyst)
-                cookieObj.qm_keyst = String(cgiBody.musickey);
-            if (cgiBody.musickey && !cookieObj.qqmusic_key)
-                cookieObj.qqmusic_key = String(cgiBody.musickey);
-            if (cgiBody.openid && !cookieObj.openid)
-                cookieObj.openid = String(cgiBody.openid);
-            if (cgiBody.refresh_token && !cookieObj.refresh_token)
-                cookieObj.refresh_token = String(cgiBody.refresh_token);
-            const cookieStr = cookieToString(cookieObj);
+        // 2. 优先检查实时会话事件
+        if (session && session.code === 200) {
             return {
                 status: 200,
                 body: {
                     code: 200,
                     message: "登录成功",
-                    uin: cookieObj.uin || String(cgiBody.musicid || ""),
-                    musickey: cookieObj.qm_keyst || String(cgiBody.musickey || ""),
-                    cookieStr,
-                    data: cgiBody,
+                    uin: session.uin || "",
+                    musickey: session.musickey || "",
+                    cookieStr: session.cookieStr || "",
                 },
-                cookie: cookies,
             };
         }
+        if (session && session.code === 802) {
+            return {
+                status: 200,
+                body: { code: 802, message: session.message || "已扫码，等待确认" },
+            };
+        }
+        if (session && session.code === 800) {
+            return {
+                status: 200,
+                body: { code: 800, message: session.message || "二维码已过期，请刷新" },
+            };
+        }
+        if (session && session.code === 803) {
+            return {
+                status: 200,
+                body: { code: 803, message: session.message || "用户取消授权" },
+            };
+        }
+        // 3. 兜底轮询 CheckQRCode CGI 状态
+        try {
+            const cgiRes = await req("music.login.LoginServer", "CheckQRCode", {
+                qrcodeID,
+                tmeAppID: "qqmusic",
+            }, {
+                platform: "android",
+            });
+            const cgiBody = (cgiRes.body || {});
+            const code = cgiBody.code !== undefined ? cgiBody.code : cgiBody.ret;
+            if (code === 40001) {
+                return {
+                    status: 200,
+                    body: { code: 802, message: "已扫码，等待确认" },
+                };
+            }
+            if (code === 40002) {
+                return {
+                    status: 200,
+                    body: { code: 800, message: "二维码已过期，请刷新" },
+                };
+            }
+            if (code === 0) {
+                const cookies = cgiRes.cookie || [];
+                const cookieObj = parseSetCookie(cookies);
+                if (cgiBody.musicid && !cookieObj.uin)
+                    cookieObj.uin = String(cgiBody.musicid);
+                if (cgiBody.musickey && !cookieObj.qm_keyst)
+                    cookieObj.qm_keyst = String(cgiBody.musickey);
+                if (cgiBody.musickey && !cookieObj.qqmusic_key)
+                    cookieObj.qqmusic_key = String(cgiBody.musickey);
+                if (cgiBody.openid && !cookieObj.openid)
+                    cookieObj.openid = String(cgiBody.openid);
+                if (cgiBody.refresh_token && !cookieObj.refresh_token)
+                    cookieObj.refresh_token = String(cgiBody.refresh_token);
+                const cookieStr = cookieToString(cookieObj);
+                return {
+                    status: 200,
+                    body: {
+                        code: 200,
+                        message: "登录成功",
+                        uin: cookieObj.uin || String(cgiBody.musicid || ""),
+                        musickey: cookieObj.qm_keyst || String(cgiBody.musickey || ""),
+                        cookieStr,
+                        data: cgiBody,
+                    },
+                    cookie: cookies,
+                };
+            }
+        }
+        catch { }
         return {
             status: 200,
             body: {
-                code: 801,
-                message: cgiBody.msg || "等待扫码",
-                data: cgiBody,
+                code: session?.code || 801,
+                message: session?.message || "等待 QQ 音乐 App 扫码",
             },
         };
     }

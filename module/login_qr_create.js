@@ -1,6 +1,7 @@
 import { request } from "../util/request.js";
 import { hash33 } from "../util/crypto.js";
 import { parseSetCookie } from "../util/cookie.js";
+import { registerMobileSession } from "../util/mobile_qr_session.js";
 /**
  * 获取登录二维码 (QQ / 微信 / 移动端App).
  *
@@ -78,13 +79,20 @@ export default async function login_qr_create(query = {}, req = request) {
     const cgiRes = await req("music.login.LoginServer", "CreateQRCode", {
         tmeAppID: "qqmusic",
     }, { platform: "android" });
+    const qrcodeID = cgiRes.body?.qrcodeID;
+    if (qrcodeID) {
+        try {
+            registerMobileSession(qrcodeID);
+        }
+        catch { }
+    }
     return {
         status: cgiRes.status,
         body: {
             code: 200,
             type: "mobile",
             qrcode: cgiRes.body?.qrcode,
-            qrcodeID: cgiRes.body?.qrcodeID,
+            qrcodeID,
         },
         cookie: cgiRes.cookie,
     };

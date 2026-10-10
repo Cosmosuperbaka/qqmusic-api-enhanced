@@ -64,7 +64,21 @@ export async function requestCgi(module, method, param = {}, options = {}) {
         const responseJson = (await res.json());
         // 解包 req_0
         const req0 = responseJson?.req_0;
-        const resultBody = req0 ? (req0.data !== undefined ? req0.data : req0) : responseJson;
+        let resultBody = responseJson;
+        if (req0) {
+            if (req0.data !== undefined && req0.data !== null && typeof req0.data === "object") {
+                resultBody = Array.isArray(req0.data) ? req0.data : { ...req0.data };
+                if (!Array.isArray(resultBody) && resultBody.code === undefined && req0.code !== undefined) {
+                    resultBody.code = req0.code;
+                }
+            }
+            else if (req0.data !== undefined) {
+                resultBody = req0.data;
+            }
+            else {
+                resultBody = req0;
+            }
+        }
         return {
             status: res.status,
             body: resultBody,

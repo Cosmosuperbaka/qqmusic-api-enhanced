@@ -16,7 +16,8 @@ export default async function login_status(query = {}, req = request) {
     });
     const data = (cgiRes.body || {});
     const userData = data.user || data.userInfo || data;
-    const isLogin = data.code === 0 && Boolean(userData.uin || userData.encryptUin || uin);
+    const isLogin = (data.code === 0 || (data.code === undefined && Boolean(userData.uin || userData.encryptUin))) &&
+        Boolean(userData.uin || userData.encryptUin || uin);
     if (userData.uin) {
         uin = String(userData.uin).trim();
     }
