@@ -166,6 +166,8 @@ export default async function login_qr_check(query = {}, req = request) {
                     message: "登录成功",
                     uin: session.uin || "",
                     musickey: session.musickey || "",
+                    nickname: session.nickname || "",
+                    avatarUrl: session.avatarUrl || "",
                     cookieStr: session.cookieStr || "",
                 },
             };

@@ -4,6 +4,8 @@ export interface MobileLoginState {
     message: string;
     uin?: string;
     musickey?: string;
+    nickname?: string;
+    avatarUrl?: string;
     cookieStr?: string;
     createdAt: number;
     client?: mqtt.MqttClient;

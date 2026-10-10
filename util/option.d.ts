@@ -10,6 +10,7 @@ export interface RequestOptions {
     musickey?: string;
     headers?: Record<string, string>;
     timeout?: number;
+    comm?: Record<string, any>;
 }
 export interface NormalizedOptions {
     platform: PlatformType;
@@ -22,6 +23,7 @@ export interface NormalizedOptions {
     musickey: string;
     headers: Record<string, string>;
     timeout: number;
+    comm?: Record<string, any>;
 }
 /**
  * 格式化并补全请求配置选项.

@@ -13,7 +13,7 @@ import song_detail_fn from "./module/song_detail.js";
 import song_url_fn from "./module/song_url.js";
 import user_detail_fn from "./module/user_detail.js";
 import user_playlist_fn from "./module/user_playlist.js";
-import user_vip_info_fn, { deriveVipInfo, type NormalizedVipInfo } from "./module/user_vip_info.js";
+import user_vip_info_fn, { deriveVipInfo, parseVipFromIcons, type NormalizedVipInfo } from "./module/user_vip_info.js";
 import { cookieToJson, cookieToString, parseSetCookie } from "./util/cookie.js";
 import { getGtk, getGuid, getSearchId, hash33, qrcDecrypt } from "./util/crypto.js";
 import { request, requestCgi, requestRaw, type ApiResponse } from "./util/request.js";
@@ -42,7 +42,7 @@ export declare const user_vip_info: (query?: Parameters<typeof user_vip_info_fn>
     data: any;
     vip: NormalizedVipInfo;
 }>>;
-export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getSearchId, cookieToJson, cookieToString, parseSetCookie, deriveVipInfo, type ApiResponse, type NormalizedVipInfo, type NormalizedLoginAccount, type LoginStatusResult, };
+export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getSearchId, cookieToJson, cookieToString, parseSetCookie, deriveVipInfo, parseVipFromIcons, type ApiResponse, type NormalizedVipInfo, type NormalizedLoginAccount, type LoginStatusResult, };
 declare const api: {
     artist_detail: (query?: Parameters<typeof artist_detail_fn>[0]) => Promise<ApiResponse<any>>;
     artist_songs: (query?: Parameters<typeof artist_songs_fn>[0]) => Promise<ApiResponse<any>>;
@@ -69,6 +69,7 @@ declare const api: {
         vip: NormalizedVipInfo;
     }>>;
     deriveVipInfo: typeof deriveVipInfo;
+    parseVipFromIcons: typeof parseVipFromIcons;
     request: typeof request;
     requestCgi: typeof requestCgi;
     requestRaw: typeof requestRaw;

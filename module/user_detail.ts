@@ -16,26 +16,52 @@ export default async function user_detail(
     query.uin?.toString() ||
     cookieObj.uin ||
     cookieObj.qqmusic_uin ||
+    cookieObj.musicid ||
     cookieObj.wxuin ||
+    cookieObj.euin ||
     "0";
 
   const cgiRes = await req(
-    "music.userHomepage.UserHomepage",
+    "music.UnifiedHomepage.UnifiedHomepageSrv",
     "GetHomepageHeader",
     {
-      uin: Number(targetUin) || 0,
+      uin: targetUin,
+      IsQueryTabDetail: 1,
     },
     {
+      uin: targetUin,
       cookie: query.cookie,
-      platform: "web",
+      platform: "android",
     }
   );
+
+  const rawData = cgiRes.body?.data || cgiRes.body || {};
+  const info = rawData.Info || rawData.info || {};
+  const baseInfo = info.BaseInfo || info.base_info || {};
+  const newIconInfo = info.NewIconInfo || info.new_icon_info || {};
+  const icons = info.Icons || info.icons || [];
+
+  const nick = String(baseInfo.Name || baseInfo.name || "").trim();
+  const avatarUrl = String(baseInfo.BigAvatar || baseInfo.Avatar || baseInfo.avatar || "").trim();
+
+  const formattedData = {
+    ...rawData,
+    nick,
+    headurl: avatarUrl,
+    avatar: avatarUrl,
+    BaseInfo: baseInfo,
+    NewIconInfo: newIconInfo,
+    Icons: icons,
+    Info: info,
+  };
 
   return {
     status: cgiRes.status,
     body: {
       code: cgiRes.body?.code ?? 200,
-      data: cgiRes.body,
+      data: formattedData,
+      nick,
+      avatarUrl,
     },
     cookie: cgiRes.cookie,
   };

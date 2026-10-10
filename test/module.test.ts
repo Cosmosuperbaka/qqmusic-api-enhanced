@@ -227,6 +227,40 @@ describe("业务模块调度与 Mock 契约验证", () => {
     expect(vip.vipLevel).toBe(6);
     expect(vip.vipYear).toBe(true);
     expect(vip.vipExpireTime).toBeGreaterThan(0);
+
+    // 验证官方字段 HugeYearFlag 与 HugeVip (年豪华绿钻 6 级)
+    const officialVipData = {
+      identity: {
+        HugeVip: 1,
+        level: 6,
+        HugeYearFlag: 1,
+        HugeVipEnd: "2028-05-20",
+      },
+    };
+    const officialVip = deriveVipInfo(officialVipData);
+    expect(officialVip.vipStatus).toBe("vip");
+    expect(officialVip.vipTier).toBe("vip");
+    expect(officialVip.vipLevel).toBe(6);
+    expect(officialVip.vipYear).toBe(true);
+
+    // 验证从主页官方勋章母版特征（nvip6.png）兜底推导
+    const badgeVipData = {
+      Info: {
+        NewIconInfo: {
+          iconlist: [
+            {
+              srcUrl: "https://y.qq.com/mediastyle/lv-icon/v14/2x/nvip6.png",
+              Helptxt: "年费绿钻",
+            },
+          ],
+        },
+      },
+    };
+    const badgeVip = deriveVipInfo(badgeVipData);
+    expect(badgeVip.vipStatus).toBe("vip");
+    expect(badgeVip.vipTier).toBe("vip");
+    expect(badgeVip.vipLevel).toBe(6);
+    expect(badgeVip.vipYear).toBe(true);
   });
 
   it("login_qr_check 支持 mobile App 扫码分支", async () => {
@@ -262,6 +296,73 @@ describe("业务模块调度与 Mock 契约验证", () => {
     expect(authRes.body.uin).toBe("12345678");
     expect(authRes.body.musickey).toBe("test_musickey_val");
     expect(authRes.body.cookieStr).toContain("qm_keyst=test_musickey_val");
+  });
+
+  it("user_detail 与 login_status 能够从主页接口完整提取真实用户名、头像及年豪华绿钻", async () => {
+    const user_detail_mod = (await import("../module/user_detail.js")).default;
+    const login_status_mod = (await import("../module/login_status.js")).default;
+
+    const mockHomepageReq = async (module: string, method: string, param: any, options: any) => {
+      if (module === "music.UnifiedHomepage.UnifiedHomepageSrv" && method === "GetHomepageHeader") {
+        return {
+          status: 200,
+          body: {
+            code: 0,
+            data: {
+              Info: {
+                BaseInfo: {
+                  Name: "淋雨之前",
+                  Avatar: "http://example.com/avatar_small.jpg",
+                  BigAvatar: "http://example.com/avatar_big.jpg",
+                },
+                NewIconInfo: {
+                  iconlist: [
+                    {
+                      srcUrl: "https://y.qq.com/mediastyle/lv-icon/v14/2x/nvip6.png",
+                      Helptxt: "年费绿钻",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          cookie: [],
+        };
+      }
+      if (module === "music.UserInfo.userInfoServer" && method === "GetLoginUserInfo") {
+        return {
+          status: 200,
+          body: { code: 1000 },
+          cookie: [],
+        };
+      }
+      if (module === "VipLogin.VipLoginInter" && method === "vip_login_base") {
+        return {
+          status: 200,
+          body: { code: 0, data: {} },
+          cookie: [],
+        };
+      }
+      return { status: 200, body: {}, cookie: [] };
+    };
+
+    const detailRes = await user_detail_mod({ uin: "1762201051" }, mockHomepageReq as any);
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.body.nick).toBe("淋雨之前");
+    expect(detailRes.body.avatarUrl).toBe("http://example.com/avatar_big.jpg");
+
+    const statusRes = await login_status_mod(
+      { cookie: "uin=1762201051; qm_keyst=test_key;" },
+      mockHomepageReq as any
+    );
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.isLogin).toBe(true);
+    expect(statusRes.body.account.nickname).toBe("淋雨之前");
+    expect(statusRes.body.account.avatarUrl).toBe("http://example.com/avatar_big.jpg");
+    expect(statusRes.body.account.vipStatus).toBe("vip");
+    expect(statusRes.body.account.vipTier).toBe("vip");
+    expect(statusRes.body.account.vipLevel).toBe(6);
+    expect(statusRes.body.account.vipYear).toBe(true);
   });
 });
 

@@ -30,6 +30,8 @@ export interface MobileLoginState {
   message: string;
   uin?: string;
   musickey?: string;
+  nickname?: string;
+  avatarUrl?: string;
   cookieStr?: string;
   createdAt: number;
   client?: mqtt.MqttClient;
@@ -133,6 +135,7 @@ export function registerMobileSession(qrcodeId: string) {
           const uin = cookies.qqmusic_uin?.value || cookies.uin?.value || payload?.uin;
           const key = cookies.qqmusic_key?.value || cookies.qm_keyst?.value || payload?.musickey;
           if (uin && key) {
+            let loginData: any = null;
             let resultCookies: Record<string, string> = {};
             try {
               const loginRes = await requestCgi(
@@ -143,20 +146,48 @@ export function registerMobileSession(qrcodeId: string) {
                   qrCodeID: qrcodeId,
                   token: String(key),
                 },
-                { platform: "android" },
+                {
+                  platform: "android",
+                  comm: { tmeLoginType: 6 },
+                },
               );
+              loginData = loginRes.body;
               resultCookies = parseSetCookie(loginRes.cookie || []);
             } catch {}
 
+            const realMusickey = String(loginData?.musickey || key);
+            const realUin = String(loginData?.musicid || uin);
+            const nick = String(loginData?.nick || "").trim();
+            const logo = String(loginData?.logo || "").trim();
+            const encryptUin = String(loginData?.encryptUin || cookies.euin?.value || "");
+            const refreshToken = String(loginData?.refresh_token || "");
+            const accessToken = String(loginData?.access_token || "");
+            const loginType = String(loginData?.loginType || 2);
+
             const cookieObj: Record<string, string> = {
-              uin: String(uin),
-              qqmusic_uin: String(uin),
-              qm_keyst: String(key),
-              qqmusic_key: String(key),
+              uin: realUin,
+              qqmusic_uin: realUin,
+              musicid: realUin,
+              qm_keyst: realMusickey,
+              qqmusic_key: realMusickey,
+              musickey: realMusickey,
+              tmeAppID: "qqmusic",
+              tmeLoginType: loginType,
             };
 
+            if (encryptUin) {
+              cookieObj.euin = encryptUin;
+              cookieObj.encryptUin = encryptUin;
+            }
+            if (refreshToken) {
+              cookieObj.refresh_token = refreshToken;
+            }
+            if (accessToken) {
+              cookieObj.access_token = accessToken;
+            }
+
             for (const [cookieName, cookieItem] of Object.entries(cookies as Record<string, any>)) {
-              if (cookieItem && typeof cookieItem.value === "string") {
+              if (cookieItem && typeof cookieItem.value === "string" && !cookieObj[cookieName]) {
                 cookieObj[cookieName] = cookieItem.value;
               }
             }
@@ -165,8 +196,10 @@ export function registerMobileSession(qrcodeId: string) {
 
             state.code = 200;
             state.message = "登录成功";
-            state.uin = String(uin);
-            state.musickey = String(key);
+            state.uin = realUin;
+            state.musickey = realMusickey;
+            if (nick) state.nickname = nick;
+            if (logo) state.avatarUrl = logo;
             state.cookieStr = cookieToString(cookieObj);
             try {
               client.end(true);

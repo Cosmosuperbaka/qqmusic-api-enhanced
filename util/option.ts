@@ -14,6 +14,7 @@ export interface RequestOptions {
   musickey?: string;
   headers?: Record<string, string>;
   timeout?: number;
+  comm?: Record<string, any>;
 }
 
 export interface NormalizedOptions {
@@ -27,6 +28,7 @@ export interface NormalizedOptions {
   musickey: string;
   headers: Record<string, string>;
   timeout: number;
+  comm?: Record<string, any>;
 }
 
 /**
@@ -88,6 +90,7 @@ export function createOption(
     musickey,
     headers,
     timeout: query.timeout || 10000,
+    comm: query.comm,
   };
 }
 
@@ -97,8 +100,9 @@ export function createOption(
 export function buildComm(options: NormalizedOptions): Record<string, any> {
   const gTk = options.musickey ? getGtk(options.musickey) : 5381;
 
+  let baseComm: Record<string, any>;
   if (options.platform === "android") {
-    return {
+    baseComm = {
       ct: 11,
       cv: 20090008,
       v: 20090008,
@@ -108,30 +112,40 @@ export function buildComm(options: NormalizedOptions): Record<string, any> {
       tmeAppID: "qqmusic",
       guid: options.guid,
     };
-  }
-
-  if (options.platform === "desktop") {
-    return {
+  } else if (options.platform === "desktop") {
+    baseComm = {
       ct: 19,
       cv: 2201,
       guid: options.guid,
       uin: Number(options.uin) || 0,
     };
+  } else {
+    // Web 平台
+    baseComm = {
+      ct: 24,
+      cv: 4747474,
+      platform: "yqq.json",
+      chid: "0",
+      uin: Number(options.uin) || 0,
+      g_tk: gTk,
+      g_tk_new_20200303: gTk,
+      format: "json",
+      inCharset: "utf-8",
+      outCharset: "utf-8",
+      notice: 0,
+      need_new_code: 1,
+    };
   }
 
-  // Web 平台
-  return {
-    ct: 24,
-    cv: 4747474,
-    platform: "yqq.json",
-    chid: "0",
-    uin: Number(options.uin) || 0,
-    g_tk: gTk,
-    g_tk_new_20200303: gTk,
-    format: "json",
-    inCharset: "utf-8",
-    outCharset: "utf-8",
-    notice: 0,
-    need_new_code: 1,
-  };
+  if (options.comm) {
+    for (const [k, v] of Object.entries(options.comm)) {
+      if (v === undefined || v === null) {
+        delete baseComm[k];
+      } else {
+        baseComm[k] = v;
+      }
+    }
+  }
+
+  return baseComm;
 }

@@ -18,6 +18,7 @@ import user_detail_fn from "./module/user_detail.js";
 import user_playlist_fn from "./module/user_playlist.js";
 import user_vip_info_fn, {
   deriveVipInfo,
+  parseVipFromIcons,
   type NormalizedVipInfo,
 } from "./module/user_vip_info.js";
 
@@ -88,6 +89,7 @@ export {
   cookieToString,
   parseSetCookie,
   deriveVipInfo,
+  parseVipFromIcons,
   type ApiResponse,
   type NormalizedVipInfo,
   type NormalizedLoginAccount,
@@ -112,6 +114,7 @@ const api = {
   user_playlist,
   user_vip_info,
   deriveVipInfo,
+  parseVipFromIcons,
   request,
   requestCgi,
   requestRaw,

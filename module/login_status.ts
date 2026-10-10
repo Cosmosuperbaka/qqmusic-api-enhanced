@@ -35,21 +35,25 @@ export default async function login_status(
   req = request
 ): Promise<ApiResponse<LoginStatusResult>> {
   const cookieObj = cookieToJson(query.cookie);
-  let uin = cookieObj.uin || cookieObj.qqmusic_uin || cookieObj.wxuin || "";
+  let uin = cookieObj.uin || cookieObj.qqmusic_uin || cookieObj.musicid || cookieObj.wxuin || "";
+  const musickey = cookieObj.qm_keyst || cookieObj.qqmusic_key || cookieObj.musickey || "";
 
-  const cgiRes = await req(
-    "music.UserInfo.userInfoServer",
-    "GetLoginUserInfo",
-    {},
-    {
-      cookie: query.cookie,
-      platform: "web",
-    }
-  );
+  let cgiRes: any = { status: 200, body: {} };
+  try {
+    cgiRes = await req(
+      "music.UserInfo.userInfoServer",
+      "GetLoginUserInfo",
+      {},
+      {
+        cookie: query.cookie,
+        platform: "android",
+      }
+    );
+  } catch {}
 
   const data = (cgiRes.body || {}) as any;
   const userData = data.user || data.userInfo || data;
-  const isLogin =
+  let isLogin =
     (data.code === 0 || (data.code === undefined && Boolean(userData.uin || userData.encryptUin))) &&
     Boolean(userData.uin || userData.encryptUin || uin);
 
@@ -62,13 +66,16 @@ export default async function login_status(
   let nickname = userData.nick || userData.nickname || "";
   let avatarUrl: string | undefined = userData.headurl || userData.avatar;
 
-  // 若基本信息不全且处于已登录状态，尝试从 user_detail 补全昵称与头像
-  if (isLogin && (!nickname || !avatarUrl)) {
+  // 若基本信息不全，只要有 uin，调用 user_detail 补全真实昵称与高清头像
+  if (uin && (!nickname || !avatarUrl)) {
     try {
       const detailRes = await user_detail_fn({ uin, cookie: query.cookie }, req);
-      const header = detailRes.body?.data?.data || detailRes.body?.data || {};
-      if (header.nick && !nickname) nickname = header.nick;
-      if (header.headurl && !avatarUrl) avatarUrl = header.headurl;
+      const detailData = detailRes.body?.data || {};
+      if (detailData.nick && !nickname) nickname = detailData.nick;
+      if (detailData.headurl && !avatarUrl) avatarUrl = detailData.headurl;
+      if (detailData.nick && Boolean(musickey || uin)) {
+        isLogin = true;
+      }
     } catch {}
   }
 
@@ -78,9 +85,9 @@ export default async function login_status(
 
   // 补全 VIP 会员信息
   let vip: NormalizedVipInfo = { vipStatus: "nonVip" };
-  if (isLogin) {
+  if (isLogin || uin) {
     try {
-      const vipRes = await user_vip_info_fn({ cookie: query.cookie }, req);
+      const vipRes = await user_vip_info_fn({ cookie: query.cookie, uin }, req);
       vip = vipRes.body.vip;
     } catch {
       vip = { vipStatus: "unknown" };
@@ -99,7 +106,7 @@ export default async function login_status(
   };
 
   return {
-    status: cgiRes.status,
+    status: cgiRes.status || 200,
     body: {
       code: isLogin ? 200 : 301,
       isLogin,

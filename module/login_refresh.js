@@ -11,10 +11,12 @@ export default async function login_refresh(query = {}, req = request) {
     const cookieObj = cookieToJson(query.cookie);
     const uin = cookieObj.uin || cookieObj.qqmusic_uin || cookieObj.wxuin || "0";
     const musickey = cookieObj.qm_keyst || cookieObj.qqmusic_key || "";
+    const loginType = cookieObj.tmeLoginType || (musickey.startsWith("W_X") ? "1" : "2");
     const param = {
         openid: query.openid || cookieObj.openid || "",
         refresh_token: query.refresh_token || cookieObj.refresh_token || "",
         refresh_key: query.refresh_key || cookieObj.refresh_key || "",
+        access_token: cookieObj.access_token || "",
         musicid: Number(uin) || 0,
         str_musicid: uin,
         musickey,
@@ -22,16 +24,28 @@ export default async function login_refresh(query = {}, req = request) {
     };
     const cgiRes = await req("music.login.LoginServer", "Login", param, {
         cookie: query.cookie,
-        platform: "web",
+        platform: "android",
+        comm: { tmeLoginType: Number(loginType) || 2 },
     });
     const resBody = (cgiRes.body || {});
     const newCookies = parseSetCookie(cgiRes.cookie || []);
     const mergedCookies = { ...cookieObj, ...newCookies };
-    if (resBody.musickey && !mergedCookies.qm_keyst) {
+    if (resBody.musickey) {
         mergedCookies.qm_keyst = resBody.musickey;
-    }
-    if (resBody.musickey && !mergedCookies.qqmusic_key) {
         mergedCookies.qqmusic_key = resBody.musickey;
+        mergedCookies.musickey = resBody.musickey;
+    }
+    if (resBody.musicid) {
+        mergedCookies.uin = String(resBody.musicid);
+        mergedCookies.qqmusic_uin = String(resBody.musicid);
+        mergedCookies.musicid = String(resBody.musicid);
+    }
+    if (resBody.encryptUin) {
+        mergedCookies.euin = resBody.encryptUin;
+        mergedCookies.encryptUin = resBody.encryptUin;
+    }
+    if (resBody.refresh_token) {
+        mergedCookies.refresh_token = resBody.refresh_token;
     }
     const cookieStr = cookieToString(mergedCookies);
     return {
