@@ -189,6 +189,7 @@ describe("业务模块调度与 Mock 契约验证", () => {
     expect(captured.page_num).toBe(2);
     expect(captured.num_per_page).toBe(30);
     expect(res.status).toBe(200);
+    expect(Array.isArray((res.body as any).songs)).toBe(true);
   });
 
   it("main 聚合对象导出所有模块", () => {
@@ -284,6 +285,27 @@ describe("业务模块调度与 Mock 契约验证", () => {
     expect(downgradedWithDate.vipLevel).toBe(6);
     expect(downgradedWithDate.vipYear).toBe(true);
     expect(downgradedWithDate.vipExpireTime).toBe(Date.parse("2027/09/12 00:00:00"));
+
+    // 验证无 HugeVipEnd 专有字段，但 userinfo.expire 下发有效未过期时间 (2027/9/12)，
+    // 且 starend 为已过期 SVIP (2025/9/12) 的实际接口数据形态
+    const expiredSvipWithUserinfoExpireData = {
+      svip: 1,
+      starend: "2025-09-12 00:00:00",
+      userinfo: {
+        expire: 1820793600, // 2027-09-12
+      },
+      identity: {
+        HugeVip: 1,
+        level: 6,
+        HugeYearFlag: 1,
+      },
+    };
+    const downgradedWithUserinfoExpire = deriveVipInfo(expiredSvipWithUserinfoExpireData, testNow);
+    expect(downgradedWithUserinfoExpire.vipStatus).toBe("vip");
+    expect(downgradedWithUserinfoExpire.vipTier).toBe("vip");
+    expect(downgradedWithUserinfoExpire.vipLevel).toBe(6);
+    expect(downgradedWithUserinfoExpire.vipYear).toBe(true);
+    expect(downgradedWithUserinfoExpire.vipExpireTime).toBe(1820793600000);
 
     // 验证若 SVIP 与绿钻两者均已过期（如均为 2025 年），但主页佩戴有勋章兜底时：
     // 降级为 vip，过期的失效时间被安全清除为 undefined

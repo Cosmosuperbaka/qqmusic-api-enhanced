@@ -16,4 +16,5 @@ export default function search(query?: {
     limit?: number;
     cookie?: any;
     searchid?: string;
+    platform?: string;
 }, req?: typeof request): Promise<ApiResponse>;

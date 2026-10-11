@@ -21,6 +21,7 @@ export default async function search(query = {}, req = request) {
     const page = Math.max(Number(query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
     const searchId = query.searchid || getSearchId();
+    const platform = query.platform || "desktop";
     const cgiRes = await req("music.search.SearchCgiService", "DoSearchForQQMusicMobile", {
         query: keyword,
         search_type: searchType,
@@ -30,13 +31,18 @@ export default async function search(query = {}, req = request) {
         highlight: 1,
     }, {
         cookie: query.cookie,
-        platform: "android",
+        platform,
     });
+    const rawBody = cgiRes.body || {};
+    const dataBody = rawBody.body || rawBody.data?.body || rawBody.data || rawBody;
+    const songItems = dataBody.item_song || dataBody.song?.list || dataBody.songs || [];
+    const songs = Array.isArray(songItems) ? songItems : (songItems.items || []);
     return {
         status: cgiRes.status,
         body: {
             code: cgiRes.body?.code ?? 200,
             data: cgiRes.body,
+            songs,
         },
         cookie: cgiRes.cookie,
     };

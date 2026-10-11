@@ -83,11 +83,10 @@ export function deriveVipInfo(body, now = Date.now()) {
         svipExpire = parseDateMs(vipData.starend);
     else if (vipData.ystarend)
         svipExpire = parseDateMs(vipData.ystarend);
+    else if (vipData.send)
+        svipExpire = parseDateMs(vipData.send);
     else if (identity.SvipEnd || identity.svip_end)
         svipExpire = parseDateMs(identity.SvipEnd || identity.svip_end);
-    else if (svip > 0 && Number(vipData.userinfo?.expire || 0) > 0) {
-        svipExpire = parseDateMs(vipData.userinfo.expire);
-    }
     // 2. 分别提取普通 VIP / 豪华绿钻专有到期时间
     let vipExpire = undefined;
     if (identity.HugeVipEnd)
@@ -100,8 +99,24 @@ export function deriveVipInfo(body, now = Date.now()) {
         vipExpire = parseDateMs(identity.overdate);
     else if (vipData.mygreen)
         vipExpire = parseDateMs(vipData.mygreen);
-    else if (svip === 0 && Number(vipData.userinfo?.expire || 0) > 0) {
-        vipExpire = parseDateMs(vipData.userinfo.expire);
+    // 3. 通用 userinfo.expire 归集
+    const userinfoExpire = Number(vipData.userinfo?.expire || 0) > 0 ? parseDateMs(vipData.userinfo.expire) : undefined;
+    if (userinfoExpire !== undefined) {
+        if (svipExpire === undefined && vipExpire === undefined) {
+            if (svip > 0 && userinfoExpire > now) {
+                svipExpire = userinfoExpire;
+            }
+            else {
+                vipExpire = userinfoExpire;
+            }
+        }
+        else if (vipExpire === undefined) {
+            // 若已解析出 svipExpire（如已过期的 starend/send），则通用的 userinfo.expire 归属于绿钻 vipExpire
+            vipExpire = userinfoExpire;
+        }
+        else if (svipExpire === undefined && svip > 0) {
+            svipExpire = userinfoExpire;
+        }
     }
     const isSvipExpired = svipExpire !== undefined && svipExpire <= now;
     const isVipExpired = vipExpire !== undefined && vipExpire <= now;
@@ -137,14 +152,11 @@ export function deriveVipInfo(body, now = Date.now()) {
             vipTier = iconVip.vipTier;
             vipLevel = iconVip.vipLevel;
             vipYear = iconVip.vipYear;
-            if (iconVip.vipTier === "vip" && vipExpire && vipExpire > now) {
-                vipExpireTime = vipExpire;
+            if (iconVip.vipTier === "vip") {
+                vipExpireTime = vipExpire && vipExpire > now ? vipExpire : (userinfoExpire && userinfoExpire > now ? userinfoExpire : undefined);
             }
-            else if (iconVip.vipTier === "svip" && svipExpire && svipExpire > now) {
-                vipExpireTime = svipExpire;
-            }
-            else {
-                vipExpireTime = undefined;
+            else if (iconVip.vipTier === "svip") {
+                vipExpireTime = svipExpire && svipExpire > now ? svipExpire : (userinfoExpire && userinfoExpire > now ? userinfoExpire : undefined);
             }
         }
     }
