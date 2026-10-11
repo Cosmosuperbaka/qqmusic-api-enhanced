@@ -36,7 +36,35 @@ export default async function search(query = {}, req = request) {
     const rawBody = cgiRes.body || {};
     const dataBody = rawBody.body || rawBody.data?.body || rawBody.data || rawBody;
     const songItems = dataBody.item_song || dataBody.song?.list || dataBody.songs || [];
-    const songs = Array.isArray(songItems) ? songItems : (songItems.items || []);
+    const rawSongs = Array.isArray(songItems) ? songItems : (songItems.items || []);
+    const strip = (str) => (typeof str === "string" ? str.replace(/<[^>]+>/g, "").trim() : str);
+    const songs = rawSongs.map((s) => {
+        if (!s || typeof s !== "object")
+            return s;
+        const clean = { ...s };
+        if (clean.title)
+            clean.title = strip(clean.title);
+        if (clean.name)
+            clean.name = strip(clean.name);
+        if (clean.songname)
+            clean.songname = strip(clean.songname);
+        if (clean.albumname)
+            clean.albumname = strip(clean.albumname);
+        if (clean.album?.name)
+            clean.album = { ...clean.album, name: strip(clean.album.name) };
+        if (Array.isArray(clean.singer)) {
+            clean.singer = clean.singer.map((singer) => {
+                if (!singer || typeof singer !== "object")
+                    return singer;
+                return {
+                    ...singer,
+                    name: strip(singer.name),
+                    title: strip(singer.title),
+                };
+            });
+        }
+        return clean;
+    });
     return {
         status: cgiRes.status,
         body: {
