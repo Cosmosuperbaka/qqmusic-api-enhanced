@@ -49,6 +49,8 @@ export default async function song_url(query = {}, req = request) {
         songmid: mids,
         songtype: songtypes,
         uin: String(uin),
+        loginflag: 1,
+        platform: "20",
         ctx: 0,
     };
     const cgiRes = await req("music.vkey.GetVkey", "UrlGetVkey", param, {
@@ -67,7 +69,7 @@ export default async function song_url(query = {}, req = request) {
     const list = midurlinfo.map((item) => {
         const mid = item.songmid;
         let url = "";
-        if (item.purl) {
+        if (item.purl && !item.purl.includes("RS02")) {
             url = `${primaryDomain}${item.purl}`;
         }
         urls[mid] = url;

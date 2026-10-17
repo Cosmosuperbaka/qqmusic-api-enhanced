@@ -69,6 +69,8 @@ export default async function song_url(
     songmid: mids,
     songtype: songtypes,
     uin: String(uin),
+    loginflag: 1,
+    platform: "20",
     ctx: 0,
   };
 
@@ -99,7 +101,7 @@ export default async function song_url(
   const list = midurlinfo.map((item) => {
     const mid = item.songmid;
     let url = "";
-    if (item.purl) {
+    if (item.purl && !item.purl.includes("RS02")) {
       url = `${primaryDomain}${item.purl}`;
     }
     urls[mid] = url;
