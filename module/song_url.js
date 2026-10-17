@@ -6,7 +6,7 @@ const FILE_PREFIXES = {
     "320": { prefix: "M800", ext: ".mp3" },
     flac: { prefix: "F000", ext: ".flac" },
     m4a: { prefix: "C400", ext: ".m4a" },
-    try: { prefix: "RS02", ext: ".mp3" },
+    try: { prefix: "C400", ext: ".m4a" },
 };
 /**
  * 获取歌曲播放音频 URL (VKey 直链提取).
