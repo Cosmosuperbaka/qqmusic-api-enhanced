@@ -357,9 +357,16 @@ export function qrcDecrypt(hexData: string): string | null;
 export function hash33(str: string): number;
 export function getGtk(skey: string): number;
 export function getGuid(): string;
+/** 由稳定种子派生 32 位设备 guid；同一账号/登录会话内保持不变。 */
+export function getStableGuid(seed: string): string;
 export function getSearchId(): string;
 export function cookieToJson(cookie: string | Record<string, string> | undefined | null): Record<string, string>;
 export function cookieToString(cookieObj: Record<string, string> | undefined | null): string;
+/** 把登录/续期响应里的凭证字段（含 refresh_token/refresh_key/openid）并入 Cookie。 */
+export function mergeLoginPayloadCookies(
+  cookieObj: Record<string, string>,
+  payload: unknown
+): { obtainedMusickey: boolean; expiresAt?: number };
 export function parseSetCookie(setCookieHeaders?: string[]): Record<string, string>;
 
 declare const api: {
@@ -388,9 +395,11 @@ declare const api: {
   hash33: typeof hash33;
   getGtk: typeof getGtk;
   getGuid: typeof getGuid;
+  getStableGuid: typeof getStableGuid;
   getSearchId: typeof getSearchId;
   cookieToJson: typeof cookieToJson;
   cookieToString: typeof cookieToString;
+  mergeLoginPayloadCookies: typeof mergeLoginPayloadCookies;
   parseSetCookie: typeof parseSetCookie;
 };
 
