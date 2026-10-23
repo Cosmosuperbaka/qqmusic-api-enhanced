@@ -2,7 +2,8 @@ import { Duplex } from "node:stream";
 import ws from "ws";
 import mqtt from "mqtt";
 import { requestCgi } from "./request.js";
-import { cookieToString, parseSetCookie } from "./cookie.js";
+import { cookieToString, mergeLoginPayloadCookies, parseSetCookie } from "./cookie.js";
+import { getStableGuid } from "./crypto.js";
 
 // Polyfill ws.createWebSocketStream for Bun runtime
 const isBun = typeof (globalThis as any).Bun !== "undefined";
@@ -33,6 +34,7 @@ export interface MobileLoginState {
   nickname?: string;
   avatarUrl?: string;
   cookieStr?: string;
+  expiresAt?: number;
   createdAt: number;
   client?: mqtt.MqttClient;
 }
@@ -193,6 +195,9 @@ export function registerMobileSession(qrcodeId: string) {
             }
 
             Object.assign(cookieObj, resultCookies);
+            // refresh_key/openid/过期时间都在 Login 响应里；统一合并，供 login_refresh 使用。
+            const merged = mergeLoginPayloadCookies(cookieObj, loginData);
+            cookieObj.guid = getStableGuid(qrcodeId);
 
             state.code = 200;
             state.message = "登录成功";
@@ -200,6 +205,7 @@ export function registerMobileSession(qrcodeId: string) {
             state.musickey = realMusickey;
             if (nick) state.nickname = nick;
             if (logo) state.avatarUrl = logo;
+            state.expiresAt = merged.expiresAt;
             state.cookieStr = cookieToString(cookieObj);
             try {
               client.end(true);

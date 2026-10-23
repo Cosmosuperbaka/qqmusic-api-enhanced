@@ -407,9 +407,10 @@ describe("业务模块调度与 Mock 契约验证", () => {
         };
       }
       if (module === "music.UserInfo.userInfoServer" && method === "GetLoginUserInfo") {
+        // 严格鉴权口径下未登录是 code=1000；这里要测的是已登录后的资料补全与 VIP 推导。
         return {
           status: 200,
-          body: { code: 1000 },
+          body: { code: 0, user: { uin: "1762201051" } },
           cookie: [],
         };
       }

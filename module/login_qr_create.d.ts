@@ -7,4 +7,5 @@ import { request, type ApiResponse } from "../util/request.js";
 export default function login_qr_create(query?: {
     type?: "qq" | "wx" | "mobile";
     cookie?: any;
+    guid?: string;
 }, req?: typeof request): Promise<ApiResponse>;

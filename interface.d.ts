@@ -39,6 +39,8 @@ export interface LoginQrCreateResult {
   qrurl?: string;
   qrimg?: string;
   url?: string;
+  /** 本次登录的设备标识；登录成功后会写入 Cookie，后续续期沿用。 */
+  guid?: string;
 }
 
 export interface LoginQrCheckQuery extends RequestBaseConfig {
@@ -54,6 +56,8 @@ export interface LoginQrCheckQuery extends RequestBaseConfig {
   qrcodeID?: string;
   /** 兼容通用 key 参数 */
   key?: string;
+  /** 设备标识；缺省由二维码会话派生，登录成功后写入 Cookie。 */
+  guid?: string;
 }
 
 export interface LoginQrCheckResult {
@@ -61,6 +65,9 @@ export interface LoginQrCheckResult {
   message: string;
   uin?: string;
   musickey?: string;
+  guid?: string;
+  /** 新凭证过期时刻（毫秒），上游给出时才有。 */
+  expiresAt?: number;
   cookie?: Record<string, string>;
   cookieStr?: string;
   data?: Record<string, any>;
@@ -95,6 +102,10 @@ export interface LoginStatusResult {
   avatarUrl?: string;
   vip: NormalizedVipInfo;
   account: NormalizedLoginAccount;
+  /** 校验过程中轮换后的完整 Cookie；调用方应回写。 */
+  cookieStr?: string;
+  /** 新凭证过期时刻（毫秒），上游给出时才有。 */
+  expiresAt?: number;
   data?: Record<string, any>;
   userInfo?: Record<string, any>;
 }
@@ -103,12 +114,17 @@ export interface LoginRefreshQuery extends RequestBaseConfig {
   openid?: string;
   refresh_token?: string;
   refresh_key?: string;
+  /** 设备标识；缺省从 Cookie/账号派生。 */
+  guid?: string;
 }
 
 export interface LoginRefreshResult {
   code: number;
   musickey?: string;
   cookieStr?: string;
+  /** 新凭证过期时刻（毫秒），上游给出时才有。 */
+  expiresAt?: number;
+  message?: string;
   data?: Record<string, any>;
   raw?: Record<string, any>;
 }

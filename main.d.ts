@@ -14,19 +14,15 @@ import song_url_fn from "./module/song_url.js";
 import user_detail_fn from "./module/user_detail.js";
 import user_playlist_fn from "./module/user_playlist.js";
 import user_vip_info_fn, { deriveVipInfo, parseVipFromIcons, type NormalizedVipInfo } from "./module/user_vip_info.js";
-import { cookieToJson, cookieToString, parseSetCookie } from "./util/cookie.js";
-import { getGtk, getGuid, getSearchId, hash33, qrcDecrypt } from "./util/crypto.js";
+import { cookieToJson, cookieToString, mergeLoginPayloadCookies, parseSetCookie } from "./util/cookie.js";
+import { getGtk, getGuid, getSearchId, getStableGuid, hash33, qrcDecrypt } from "./util/crypto.js";
 import { request, requestCgi, requestRaw, type ApiResponse } from "./util/request.js";
 import { zzcSign } from "./util/sign.js";
 export declare const artist_detail: (query?: Parameters<typeof artist_detail_fn>[0]) => Promise<ApiResponse<any>>;
 export declare const artist_songs: (query?: Parameters<typeof artist_songs_fn>[0]) => Promise<ApiResponse<any>>;
 export declare const login_qr_check: (query?: Parameters<typeof login_qr_check_fn>[0]) => Promise<ApiResponse<any>>;
 export declare const login_qr_create: (query?: Parameters<typeof login_qr_create_fn>[0]) => Promise<ApiResponse<any>>;
-export declare const login_refresh: (query?: Parameters<typeof login_refresh_fn>[0]) => Promise<ApiResponse<{
-    code: number;
-    data: any;
-    cookieStr: string;
-}>>;
+export declare const login_refresh: (query?: Parameters<typeof login_refresh_fn>[0]) => Promise<ApiResponse<import("./module/login_refresh.js").LoginRefreshBody>>;
 export declare const login_status: (query?: Parameters<typeof login_status_fn>[0]) => Promise<ApiResponse<LoginStatusResult>>;
 export declare const lyric: (query?: Parameters<typeof lyric_fn>[0]) => Promise<ApiResponse<any>>;
 export declare const playlist_detail: (query?: Parameters<typeof playlist_detail_fn>[0]) => Promise<ApiResponse<any>>;
@@ -42,17 +38,13 @@ export declare const user_vip_info: (query?: Parameters<typeof user_vip_info_fn>
     data: any;
     vip: NormalizedVipInfo;
 }>>;
-export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getSearchId, cookieToJson, cookieToString, parseSetCookie, deriveVipInfo, parseVipFromIcons, type ApiResponse, type NormalizedVipInfo, type NormalizedLoginAccount, type LoginStatusResult, };
+export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getStableGuid, getSearchId, cookieToJson, cookieToString, mergeLoginPayloadCookies, parseSetCookie, deriveVipInfo, parseVipFromIcons, type ApiResponse, type NormalizedVipInfo, type NormalizedLoginAccount, type LoginStatusResult, };
 declare const api: {
     artist_detail: (query?: Parameters<typeof artist_detail_fn>[0]) => Promise<ApiResponse<any>>;
     artist_songs: (query?: Parameters<typeof artist_songs_fn>[0]) => Promise<ApiResponse<any>>;
     login_qr_check: (query?: Parameters<typeof login_qr_check_fn>[0]) => Promise<ApiResponse<any>>;
     login_qr_create: (query?: Parameters<typeof login_qr_create_fn>[0]) => Promise<ApiResponse<any>>;
-    login_refresh: (query?: Parameters<typeof login_refresh_fn>[0]) => Promise<ApiResponse<{
-        code: number;
-        data: any;
-        cookieStr: string;
-    }>>;
+    login_refresh: (query?: Parameters<typeof login_refresh_fn>[0]) => Promise<ApiResponse<import("./module/login_refresh.js").LoginRefreshBody>>;
     login_status: (query?: Parameters<typeof login_status_fn>[0]) => Promise<ApiResponse<LoginStatusResult>>;
     lyric: (query?: Parameters<typeof lyric_fn>[0]) => Promise<ApiResponse<any>>;
     playlist_detail: (query?: Parameters<typeof playlist_detail_fn>[0]) => Promise<ApiResponse<any>>;
@@ -78,9 +70,11 @@ declare const api: {
     hash33: typeof hash33;
     getGtk: typeof getGtk;
     getGuid: typeof getGuid;
+    getStableGuid: typeof getStableGuid;
     getSearchId: typeof getSearchId;
     cookieToJson: typeof cookieToJson;
     cookieToString: typeof cookieToString;
+    mergeLoginPayloadCookies: typeof mergeLoginPayloadCookies;
     parseSetCookie: typeof parseSetCookie;
 };
 export default api;

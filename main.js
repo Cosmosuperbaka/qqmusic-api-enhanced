@@ -14,8 +14,8 @@ import song_url_fn from "./module/song_url.js";
 import user_detail_fn from "./module/user_detail.js";
 import user_playlist_fn from "./module/user_playlist.js";
 import user_vip_info_fn, { deriveVipInfo, parseVipFromIcons, } from "./module/user_vip_info.js";
-import { cookieToJson, cookieToString, parseSetCookie } from "./util/cookie.js";
-import { getGtk, getGuid, getSearchId, hash33, qrcDecrypt } from "./util/crypto.js";
+import { cookieToJson, cookieToString, mergeLoginPayloadCookies, parseSetCookie, } from "./util/cookie.js";
+import { getGtk, getGuid, getSearchId, getStableGuid, hash33, qrcDecrypt, } from "./util/crypto.js";
 import { request, requestCgi, requestRaw } from "./util/request.js";
 import { zzcSign } from "./util/sign.js";
 export const artist_detail = (query = {}) => artist_detail_fn(query, request);
@@ -34,7 +34,7 @@ export const song_url = (query = {}) => song_url_fn(query, request);
 export const user_detail = (query = {}) => user_detail_fn(query, request);
 export const user_playlist = (query = {}) => user_playlist_fn(query, request);
 export const user_vip_info = (query = {}) => user_vip_info_fn(query, request);
-export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getSearchId, cookieToJson, cookieToString, parseSetCookie, deriveVipInfo, parseVipFromIcons, };
+export { request, requestCgi, requestRaw, zzcSign, qrcDecrypt, hash33, getGtk, getGuid, getStableGuid, getSearchId, cookieToJson, cookieToString, mergeLoginPayloadCookies, parseSetCookie, deriveVipInfo, parseVipFromIcons, };
 const api = {
     artist_detail,
     artist_songs,
@@ -62,9 +62,11 @@ const api = {
     hash33,
     getGtk,
     getGuid,
+    getStableGuid,
     getSearchId,
     cookieToJson,
     cookieToString,
+    mergeLoginPayloadCookies,
     parseSetCookie,
 };
 export default api;

@@ -1,6 +1,11 @@
 import { request, requestCgi, type ApiResponse } from "../util/request.js";
-import { getGtk, getGuid } from "../util/crypto.js";
-import { cookieToString, parseSetCookie } from "../util/cookie.js";
+import { getGtk, getStableGuid } from "../util/crypto.js";
+import {
+  cookieToJson,
+  cookieToString,
+  mergeLoginPayloadCookies,
+  parseSetCookie,
+} from "../util/cookie.js";
 import { getMobileSession, registerMobileSession } from "../util/mobile_qr_session.js";
 
 /**
@@ -20,6 +25,7 @@ export default async function login_qr_check(
     uuid?: string;
     qrcodeID?: string;
     key?: string;
+    guid?: string;
   } = {},
   req = request
 ): Promise<ApiResponse> {
@@ -40,6 +46,7 @@ export default async function login_qr_check(
       `&action=0-0-${Date.now()}&js_ver=20102616&js_type=1&pt_uistyle=40` +
       `&aid=716027609&daid=383&pt_3rd_aid=100497308&has_onekey=1`;
 
+    const guid = query.guid || getStableGuid(qrsig);
     const checkRes = await fetch(checkUrl, {
       headers: {
         Referer: "https://xui.ptlogin2.qq.com/",
@@ -127,7 +134,7 @@ export default async function login_qr_check(
     authorizeFormData.append("openapi", "1010_1030");
     authorizeFormData.append("g_tk", String(gtk));
     authorizeFormData.append("auth_time", String(Date.now()));
-    authorizeFormData.append("ui", getGuid());
+    authorizeFormData.append("ui", guid);
 
     const authRes = await fetch("https://graph.qq.com/oauth2.0/authorize", {
       method: "POST",
@@ -165,6 +172,10 @@ export default async function login_qr_check(
 
     const resultCookie = loginCgiRes.cookie || [];
     const finalCookies = { ...allCookies, ...parseSetCookie(resultCookie) };
+    // 登录响应里的 refresh_token / refresh_key / openid 是后续续期的关键，
+    // 旧实现只取 musickey，导致 key 过期后无法恢复。
+    const merged = mergeLoginPayloadCookies(finalCookies, loginCgiRes.body);
+    finalCookies.guid = guid;
 
     const uin = finalCookies.uin || finalCookies.qqmusic_uin || "";
     const musickey = finalCookies.qm_keyst || finalCookies.qqmusic_key || "";
@@ -176,6 +187,8 @@ export default async function login_qr_check(
         message: "登录成功",
         uin,
         musickey,
+        guid,
+        expiresAt: merged.expiresAt,
         data: loginCgiRes.body,
         cookieStr: cookieToString(finalCookies),
       },
@@ -191,6 +204,7 @@ export default async function login_qr_check(
         body: { code: 400, message: "缺少必要参数 qrcodeID" },
       };
     }
+    const guid = query.guid || getStableGuid(qrcodeID);
 
     // 1. 确保后台 MQTT 会话已启动
     let session = getMobileSession(qrcodeID);
@@ -203,6 +217,8 @@ export default async function login_qr_check(
 
     // 2. 优先检查实时会话事件
     if (session && session.code === 200) {
+      const cookieObj = cookieToJson(session.cookieStr);
+      cookieObj.guid = cookieObj.guid || guid;
       return {
         status: 200,
         body: {
@@ -212,7 +228,8 @@ export default async function login_qr_check(
           musickey: session.musickey || "",
           nickname: session.nickname || "",
           avatarUrl: session.avatarUrl || "",
-          cookieStr: session.cookieStr || "",
+          guid,
+          cookieStr: cookieToString(cookieObj),
         },
       };
     }
@@ -270,11 +287,9 @@ export default async function login_qr_check(
       if (code === 0) {
         const cookies = cgiRes.cookie || [];
         const cookieObj = parseSetCookie(cookies);
-        if (cgiBody.musicid && !cookieObj.uin) cookieObj.uin = String(cgiBody.musicid);
-        if (cgiBody.musickey && !cookieObj.qm_keyst) cookieObj.qm_keyst = String(cgiBody.musickey);
-        if (cgiBody.musickey && !cookieObj.qqmusic_key) cookieObj.qqmusic_key = String(cgiBody.musickey);
-        if (cgiBody.openid && !cookieObj.openid) cookieObj.openid = String(cgiBody.openid);
-        if (cgiBody.refresh_token && !cookieObj.refresh_token) cookieObj.refresh_token = String(cgiBody.refresh_token);
+        // 与 QQ 网页扫码同一套合并逻辑：refresh_key/openid/access_token/过期时间都要留下。
+        const merged = mergeLoginPayloadCookies(cookieObj, cgiBody);
+        cookieObj.guid = guid;
 
         const cookieStr = cookieToString(cookieObj);
         return {
@@ -284,6 +299,8 @@ export default async function login_qr_check(
             message: "登录成功",
             uin: cookieObj.uin || String(cgiBody.musicid || ""),
             musickey: cookieObj.qm_keyst || String(cgiBody.musickey || ""),
+            guid,
+            expiresAt: merged.expiresAt,
             cookieStr,
             data: cgiBody,
           },
@@ -309,6 +326,7 @@ export default async function login_qr_check(
       body: { code: 400, message: "缺少必要参数 uuid" },
     };
   }
+  const guid = query.guid || getStableGuid(uuid);
 
   const pollUrl = `https://lp.open.weixin.qq.com/connect/l/qrconnect?uuid=${uuid}&_=${Date.now()}`;
   const wxRes = await fetch(pollUrl, {
@@ -359,6 +377,8 @@ export default async function login_qr_check(
 
     const cookies = wxLoginRes.cookie || [];
     const cookieObj = parseSetCookie(cookies);
+    const merged = mergeLoginPayloadCookies(cookieObj, wxLoginRes.body);
+    cookieObj.guid = guid;
 
     return {
       status: 200,
@@ -367,6 +387,8 @@ export default async function login_qr_check(
         message: "微信登录成功",
         uin: cookieObj.wxuin || cookieObj.uin || "",
         musickey: cookieObj.qm_keyst || cookieObj.musickey || "",
+        guid,
+        expiresAt: merged.expiresAt,
         data: wxLoginRes.body,
         cookieStr: cookieToString(cookieObj),
       },

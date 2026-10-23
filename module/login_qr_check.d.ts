@@ -15,4 +15,5 @@ export default function login_qr_check(query?: {
     uuid?: string;
     qrcodeID?: string;
     key?: string;
+    guid?: string;
 }, req?: typeof request): Promise<ApiResponse>;

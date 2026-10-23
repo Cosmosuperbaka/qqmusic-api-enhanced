@@ -18,6 +18,14 @@ export declare function getGtk(pSkey: string): number;
  */
 export declare function getGuid(): string;
 /**
+ * 由稳定种子派生 GUID。
+ *
+ * QQ 音乐会把登录态与设备标识关联；同一份凭证每次请求都换 guid 会被当成新设备，
+ * 容易触发风控或让登录态提前失效。二维码登录与旧版手填 Cookie 都走这里派生，
+ * 保证同一账号/同一登录会话内 guid 不变。
+ */
+export declare function getStableGuid(seed: string): string;
+/**
  * 生成搜索 search_id.
  */
 export declare function getSearchId(): string;

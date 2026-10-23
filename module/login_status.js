@@ -1,5 +1,5 @@
 import { request } from "../util/request.js";
-import { cookieToJson } from "../util/cookie.js";
+import { cookieToJson, cookieToString, mergeLoginPayloadCookies, parseSetCookie, } from "../util/cookie.js";
 import user_detail_fn from "./user_detail.js";
 import user_vip_info_fn from "./user_vip_info.js";
 /**
@@ -20,6 +20,9 @@ export default async function login_status(query = {}, req = request) {
     }
     catch { }
     const data = (cgiRes.body || {});
+    // 状态接口也可能轮换凭证；把 Set-Cookie 与响应字段一起并回，避免调用方继续用旧 key。
+    const mergedCookies = { ...cookieObj, ...parseSetCookie(cgiRes.cookie || []) };
+    const merged = mergeLoginPayloadCookies(mergedCookies, cgiRes.body);
     const userData = data.user || data.userInfo || data;
     const isLogin = Boolean(data.code === 0 && (userData.uin || userData.encryptUin)) ||
         Boolean(data.code === undefined && userData.uin);
@@ -72,6 +75,8 @@ export default async function login_status(query = {}, req = request) {
             avatarUrl,
             vip,
             account,
+            cookieStr: cookieToString(mergedCookies),
+            expiresAt: merged.expiresAt,
             data,
         },
         cookie: cgiRes.cookie,

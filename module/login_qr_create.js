@@ -1,5 +1,5 @@
 import { request } from "../util/request.js";
-import { hash33 } from "../util/crypto.js";
+import { getStableGuid, hash33 } from "../util/crypto.js";
 import { parseSetCookie } from "../util/cookie.js";
 import { registerMobileSession } from "../util/mobile_qr_session.js";
 /**
@@ -23,6 +23,8 @@ export default async function login_qr_create(query = {}, req = request) {
         const cookieObj = parseSetCookie(res.cookie);
         const qrsig = cookieObj.qrsig || "";
         const ptqrtoken = hash33(qrsig);
+        // 与 login_qr_check 用同一个种子派生，登录成功时写入 Cookie，保证设备标识稳定。
+        const guid = query.guid || getStableGuid(qrsig);
         // 二维码图片转 base64
         let qrimg = "";
         if (Buffer.isBuffer(res.body)) {
@@ -46,6 +48,7 @@ export default async function login_qr_create(query = {}, req = request) {
                 ptqrtoken,
                 qrimg,
                 url,
+                guid,
             },
             cookie: res.cookie,
         };
@@ -64,6 +67,7 @@ export default async function login_qr_create(query = {}, req = request) {
         const qrcodeUrl = uuid
             ? `https://open.weixin.qq.com/connect/qrcode/${uuid}`
             : "";
+        const guid = query.guid || (uuid ? getStableGuid(uuid) : "");
         return {
             status: 200,
             body: {
@@ -71,6 +75,7 @@ export default async function login_qr_create(query = {}, req = request) {
                 type: "wx",
                 uuid,
                 qrurl: qrcodeUrl,
+                guid,
             },
             cookie: res.cookie,
         };
@@ -86,6 +91,7 @@ export default async function login_qr_create(query = {}, req = request) {
         }
         catch { }
     }
+    const guid = query.guid || (qrcodeID ? getStableGuid(qrcodeID) : "");
     return {
         status: cgiRes.status,
         body: {
@@ -93,6 +99,7 @@ export default async function login_qr_create(query = {}, req = request) {
             type: "mobile",
             qrcode: cgiRes.body?.qrcode,
             qrcodeID,
+            guid,
         },
         cookie: cgiRes.cookie,
     };

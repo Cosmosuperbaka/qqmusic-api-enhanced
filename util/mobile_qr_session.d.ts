@@ -7,6 +7,7 @@ export interface MobileLoginState {
     nickname?: string;
     avatarUrl?: string;
     cookieStr?: string;
+    expiresAt?: number;
     createdAt: number;
     client?: mqtt.MqttClient;
 }

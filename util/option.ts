@@ -1,5 +1,5 @@
 import { cookieToJson } from "./cookie.js";
-import { getGuid, getGtk } from "./crypto.js";
+import { getGuid, getStableGuid, getGtk } from "./crypto.js";
 
 export type PlatformType = "web" | "android" | "desktop";
 
@@ -43,7 +43,13 @@ export function createOption(
   defaultPlatform: PlatformType = "web"
 ): NormalizedOptions {
   const cookie = cookieToJson(query.cookie);
-  const guid = query.guid || cookie.guid || getGuid();
+  // 旧版手填 Cookie 通常没有 guid：不能每次请求随机生成，否则同一账号会被当成新设备。
+  // 用账号维度派生稳定值；二维码登录会在 Cookie 里写入显式 guid，优先使用它。
+  const accountSeed = cookie.uin || cookie.qqmusic_uin || cookie.musicid || cookie.wxuin || "";
+  const guid =
+    query.guid ||
+    cookie.guid ||
+    (accountSeed ? getStableGuid(`${accountSeed}:${cookie.openid ?? ""}`) : getGuid());
 
   // 从 cookie 中识别 uin 与 musickey
   const uin =

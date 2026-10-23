@@ -22,8 +22,20 @@ import user_vip_info_fn, {
   type NormalizedVipInfo,
 } from "./module/user_vip_info.js";
 
-import { cookieToJson, cookieToString, parseSetCookie } from "./util/cookie.js";
-import { getGtk, getGuid, getSearchId, hash33, qrcDecrypt } from "./util/crypto.js";
+import {
+  cookieToJson,
+  cookieToString,
+  mergeLoginPayloadCookies,
+  parseSetCookie,
+} from "./util/cookie.js";
+import {
+  getGtk,
+  getGuid,
+  getSearchId,
+  getStableGuid,
+  hash33,
+  qrcDecrypt,
+} from "./util/crypto.js";
 import { request, requestCgi, requestRaw, type ApiResponse } from "./util/request.js";
 import { zzcSign } from "./util/sign.js";
 
@@ -84,9 +96,11 @@ export {
   hash33,
   getGtk,
   getGuid,
+  getStableGuid,
   getSearchId,
   cookieToJson,
   cookieToString,
+  mergeLoginPayloadCookies,
   parseSetCookie,
   deriveVipInfo,
   parseVipFromIcons,
@@ -123,9 +137,11 @@ const api = {
   hash33,
   getGtk,
   getGuid,
+  getStableGuid,
   getSearchId,
   cookieToJson,
   cookieToString,
+  mergeLoginPayloadCookies,
   parseSetCookie,
 };
 

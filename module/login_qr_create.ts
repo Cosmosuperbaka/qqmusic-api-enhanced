@@ -1,5 +1,5 @@
 import { request, type ApiResponse } from "../util/request.js";
-import { hash33 } from "../util/crypto.js";
+import { getStableGuid, hash33 } from "../util/crypto.js";
 import { parseSetCookie } from "../util/cookie.js";
 import { registerMobileSession } from "../util/mobile_qr_session.js";
 
@@ -9,7 +9,7 @@ import { registerMobileSession } from "../util/mobile_qr_session.js";
  * @param query.type 登录类型: 'qq' (默认), 'wx' (微信), 'mobile' (QQ音乐App)
  */
 export default async function login_qr_create(
-  query: { type?: "qq" | "wx" | "mobile"; cookie?: any } = {},
+  query: { type?: "qq" | "wx" | "mobile"; cookie?: any; guid?: string } = {},
   req = request
 ): Promise<ApiResponse> {
   const type = query.type || "qq";
@@ -32,6 +32,8 @@ export default async function login_qr_create(
     const cookieObj = parseSetCookie(res.cookie);
     const qrsig = cookieObj.qrsig || "";
     const ptqrtoken = hash33(qrsig);
+    // 与 login_qr_check 用同一个种子派生，登录成功时写入 Cookie，保证设备标识稳定。
+    const guid = query.guid || getStableGuid(qrsig);
 
     // 二维码图片转 base64
     let qrimg = "";
@@ -54,6 +56,7 @@ export default async function login_qr_create(
         ptqrtoken,
         qrimg,
         url,
+        guid,
       },
       cookie: res.cookie,
     };
@@ -77,6 +80,7 @@ export default async function login_qr_create(
     const qrcodeUrl = uuid
       ? `https://open.weixin.qq.com/connect/qrcode/${uuid}`
       : "";
+    const guid = query.guid || (uuid ? getStableGuid(uuid) : "");
 
     return {
       status: 200,
@@ -85,6 +89,7 @@ export default async function login_qr_create(
         type: "wx",
         uuid,
         qrurl: qrcodeUrl,
+        guid,
       },
       cookie: res.cookie,
     };
@@ -106,6 +111,7 @@ export default async function login_qr_create(
       registerMobileSession(qrcodeID);
     } catch {}
   }
+  const guid = query.guid || (qrcodeID ? getStableGuid(qrcodeID) : "");
 
   return {
     status: cgiRes.status,
@@ -114,6 +120,7 @@ export default async function login_qr_create(
       type: "mobile",
       qrcode: cgiRes.body?.qrcode,
       qrcodeID,
+      guid,
     },
     cookie: cgiRes.cookie,
   };

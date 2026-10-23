@@ -18,6 +18,10 @@ export interface LoginStatusResult {
     avatarUrl?: string;
     vip: NormalizedVipInfo;
     account: NormalizedLoginAccount;
+    /** 本次校验可能轮换了 Cookie（Set-Cookie / 新 musickey），调用方应回写。 */
+    cookieStr?: string;
+    /** 新凭证过期时刻（毫秒），上游给出时才有。 */
+    expiresAt?: number;
     data: any;
 }
 /**
