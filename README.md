@@ -1,12 +1,18 @@
 # qqmusic-api-enhanced
 
+[![npm](https://img.shields.io/npm/v/qqmusic-api-enhanced.svg)](https://www.npmjs.com/package/qqmusic-api-enhanced)
+[![CI](https://github.com/Cosmosuperbaka/qqmusic-api-enhanced/actions/workflows/ci.yml/badge.svg)](https://github.com/Cosmosuperbaka/qqmusic-api-enhanced/actions/workflows/ci.yml)
+[![License: MIT AND Apache-2.0](https://img.shields.io/badge/license-MIT%20AND%20Apache--2.0-blue.svg)](LICENSE)
+
 QQ 音乐增强版 Node.js / Bun API 客户端，基于 QQ 音乐逆向协议与签名机制实现。项目架构与设计风格严格对齐 `@neteasecloudmusicapienhanced/api`，旨在为音乐播放器、猜歌游戏（如 SonGuessr）、数据分析等应用提供开箱即用、零外部生产依赖的纯 TypeScript 解决方案。
+
+运行时：Node.js >= 20 或 Bun 1.x；生产依赖为零。
 
 ---
 
 ## 特性亮点
 
-- **零外部生产依赖**：纯 TypeScript 编写，直接利用 Node.js / Bun 原生 `crypto`、`zlib`、`fetch`，无需安装 heavy C++ 插件或额外加密包。
+- **零生产依赖**：纯 TypeScript 编写，直接利用 Node.js / Bun 原生 `crypto`、`zlib`、`fetch`；`devDependencies` 只用于构建与测试。
 - **全平台扫码登录**：支持手机 QQ 快捷扫码、微信网页扫码、QQ 音乐移动端 App 扫码，玩家可自主完成身份凭据提取与长效刷新。
 - **VKey 播放直链提取**：基于 `UrlGetVkey` 逆向调度，支持 128kbps (mp3)、320kbps (高品质 mp3)、FLAC (无损)、M4A 以及试听片段直链解析。
 - **QRC 逐字歌词解密**：内置原生定制版 Triple-DES（支持 QQ 音乐特定 PC-2 偏移置换）及 zlib 解压算法，自动将加密 QRC 转换为带时间戳的明文逐字歌词。
@@ -15,6 +21,8 @@ QQ 音乐增强版 Node.js / Bun API 客户端，基于 QQ 音乐逆向协议与
 ---
 
 ## 安装
+
+主包发布在 npmjs：
 
 ```bash
 # npm
@@ -26,6 +34,9 @@ pnpm add qqmusic-api-enhanced
 # bun
 bun add qqmusic-api-enhanced
 ```
+
+GitHub 仓库的 Packages 页另外提供 scoped 镜像 `@cosmosuperbaka/qqmusic-api-enhanced`；
+GitHub Packages 的 npm 安装需要带 GitHub token，日常使用请优先用上面的 npmjs 包。
 
 ---
 
@@ -129,6 +140,21 @@ import {
   requestRaw,  // 原始 fetch 包装
 } from "qqmusic-api-enhanced";
 ```
+
+---
+
+## 开发
+
+```bash
+bun install --frozen-lockfile
+bun run build
+bun test
+```
+
+构建会生成并覆盖仓库里的 `.js` / `.d.ts` 产物，提交 TypeScript 改动时请一并提交生成文件。
+贡献规范见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题见 [SECURITY.md](SECURITY.md)。
+
+不要在日志、issue、测试或代码提交里放真实 Cookie、`qm_keyst`、`refresh_token` 或 AppSecret；如果凭据可能泄露，请先在 QQ 音乐侧退出登录/轮换。
 
 ---
 

@@ -14,7 +14,12 @@
     "qq-music",
     "qq音乐",
     "api",
-    "music"
+    "music",
+    "qrc",
+    "lyrics",
+    "qq-music-api",
+    "bun",
+    "nodejs"
   ],
   "author": "BakaGame",
   "license": "MIT AND Apache-2.0",
@@ -26,6 +31,10 @@
   "bugs": {
     "url": "https://github.com/Cosmosuperbaka/qqmusic-api-enhanced/issues"
   },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "bun@1.4.2",
   "files": [
     "module",
     "util",

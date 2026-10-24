@@ -1,0 +1,85 @@
+name: Bug report
+description: 报告可复现的 bug（请先移除 Cookie、Token、AppSecret 等敏感信息）
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请勿粘贴真实 Cookie、`qm_keyst`、`refresh_token`、AppSecret、手机号或账号截图。
+        日志请先脱敏；安全问题请走 Security Advisories，不要开公开 issue。
+
+  - type: input
+    id: version
+    attributes:
+      label: 包版本
+      placeholder: 例如 1.0.8
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: 运行环境
+      options:
+        - Bun
+        - Node.js
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: runtime-version
+    attributes:
+      label: 运行时版本
+      placeholder: 例如 Bun 1.4.2 / Node 24.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: 例如 Windows 11 / Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 包含调用的函数、参数形状（不要贴真实凭据）和最小代码片段。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志
+      description: 可以留空；请删除 Cookie、Token、账号与个人信息。
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 安全检查
+      options:
+        - label: 我确认没有粘贴真实凭据、Cookie、Token 或个人信息
+          required: true

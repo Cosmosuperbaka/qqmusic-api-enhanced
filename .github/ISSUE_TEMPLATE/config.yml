@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Cosmosuperbaka/qqmusic-api-enhanced/security/advisories/new
+    about: 请通过 GitHub Security Advisories 私下报告安全问题，不要开公开 issue。
+  - name: npm package
+    url: https://www.npmjs.com/package/qqmusic-api-enhanced
+    about: 查看最新版本、安装命令与发布记录。
