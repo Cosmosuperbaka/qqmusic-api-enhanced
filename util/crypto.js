@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { inflateSync } from "node:zlib";
+import { constants, inflateSync } from "node:zlib";
 import { DECRYPT, tripleDesCrypt, tripleDesKeySetup } from "./des.js";
 const QRC_3DES_KEY = Buffer.from("!@#)(*$%123ZXC!@!@#)(NHL");
 /**
@@ -94,7 +94,9 @@ export function qrcDecrypt(encryptedQrc) {
             chunks.push(Buffer.from(decryptedBlock));
         }
         const merged = Buffer.concat(chunks);
-        const decompressed = inflateSync(merged);
+        // 真实 QRC 偶有尾部不完整的 zlib 流；Z_SYNC_FLUSH 容忍这种情况，
+        // 与上游 lx-music 实现保持一致。
+        const decompressed = inflateSync(merged, { finishFlush: constants.Z_SYNC_FLUSH });
         return decompressed.toString("utf8");
     }
     catch {

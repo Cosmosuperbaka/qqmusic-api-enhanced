@@ -1,7 +1,6 @@
 import { request, type ApiResponse } from "../util/request.js";
 import { getStableGuid, hash33 } from "../util/crypto.js";
 import { parseSetCookie } from "../util/cookie.js";
-import { registerMobileSession } from "../util/mobile_qr_session.js";
 
 /**
  * 获取登录二维码 (QQ / 微信 / 移动端App).
@@ -106,11 +105,6 @@ export default async function login_qr_create(
   );
 
   const qrcodeID = cgiRes.body?.qrcodeID;
-  if (qrcodeID) {
-    try {
-      registerMobileSession(qrcodeID);
-    } catch {}
-  }
   const guid = query.guid || (qrcodeID ? getStableGuid(qrcodeID) : "");
 
   return {

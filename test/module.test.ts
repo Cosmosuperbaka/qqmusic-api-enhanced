@@ -340,39 +340,52 @@ describe("业务模块调度与 Mock 契约验证", () => {
   });
 
 
-  it("login_qr_check 支持 mobile App 扫码分支", async () => {
+  it("login_qr_check 支持 mobile App 扫码轮询", async () => {
     const login_qr_check_mod = (await import("../module/login_qr_check.js")).default;
-    const { registerMobileSession, getMobileSession } = await import("../util/mobile_qr_session.js");
+    const { cookieToJson } = await import("../util/cookie.js");
 
     const missingRes = await login_qr_check_mod({ type: "mobile" });
     expect(missingRes.status).toBe(400);
     expect(missingRes.body.message).toContain("缺少必要参数 qrcodeID");
 
-    const mockReq = async () => ({
+    const waitingReq = async () => ({
       status: 200,
       body: { code: 40000 },
       cookie: [],
     });
-    const waitingRes = await login_qr_check_mod({ type: "mobile", qrcodeID: "test_qr_123" }, mockReq as any);
+    const waitingRes = await login_qr_check_mod(
+      { type: "mobile", qrcodeID: "test_qr_123" },
+      waitingReq as any
+    );
     expect(waitingRes.status).toBe(200);
     expect(waitingRes.body.code).toBe(801);
 
-    // 验证实时会话状态注入响应
-    registerMobileSession("test_qr_auth");
-    const session = getMobileSession("test_qr_auth");
-    if (session) {
-      session.code = 200;
-      session.uin = "12345678";
-      session.musickey = "test_musickey_val";
-      session.cookieStr = "uin=12345678; qm_keyst=test_musickey_val";
-    }
-
-    const authRes = await login_qr_check_mod({ type: "mobile", qrcodeID: "test_qr_auth" }, mockReq as any);
+    const authReq = async () => ({
+      status: 200,
+      body: {
+        code: 0,
+        musicid: 12345678,
+        musickey: "test_musickey_val",
+        openid: "test_openid",
+        refresh_token: "test_refresh_token",
+      },
+      cookie: ["qm_keyst=test_musickey_val"],
+    });
+    const authRes = await login_qr_check_mod(
+      { type: "mobile", qrcodeID: "test_qr_auth" },
+      authReq as any
+    );
     expect(authRes.status).toBe(200);
     expect(authRes.body.code).toBe(200);
     expect(authRes.body.uin).toBe("12345678");
     expect(authRes.body.musickey).toBe("test_musickey_val");
-    expect(authRes.body.cookieStr).toContain("qm_keyst=test_musickey_val");
+    expect(authRes.body.guid).toHaveLength(32);
+
+    const cookie = cookieToJson(authRes.body.cookieStr);
+    expect(cookie.qm_keyst).toBe("test_musickey_val");
+    expect(cookie.openid).toBe("test_openid");
+    expect(cookie.refresh_token).toBe("test_refresh_token");
+    expect(cookie.guid).toBe(authRes.body.guid);
   });
 
   it("user_detail 与 login_status 能够从主页接口完整提取真实用户名、头像及年豪华绿钻", async () => {

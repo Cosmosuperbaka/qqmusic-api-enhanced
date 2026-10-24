@@ -150,6 +150,14 @@ import {
 
 ---
 
+## 许可证
+
+本项目自有代码以 MIT 许可发布。`util/des.ts` 的 QRC 解密实现移植自
+[lx-music-desktop](https://github.com/lyswhut/lx-music-desktop)（Apache-2.0），
+详见 `THIRD_PARTY_NOTICES.md` 与 `LICENSES/Apache-2.0.txt`。
+
+---
+
 ## 协议与免责声明
 
 本项目仅供个人学习、技术研究与教育用途。所有接口数据与媒体资源版权归腾讯公司所有。请勿将本项目用于任何商业用途或违反相关法律法规的场景。

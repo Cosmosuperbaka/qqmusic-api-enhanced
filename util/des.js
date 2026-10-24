@@ -1,267 +1,174 @@
-// SPDX-FileCopyrightText: Copyright (c) 2024 沉默の金 <cmzj@cmzj.org>
-// SPDX-License-Identifier: GPL-3.0-only
-// Ported to TypeScript for qqmusic-api-enhanced
+// SPDX-FileCopyrightText: Copyright (c) lyswhut and lx-music-desktop contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Ported to TypeScript from lx-music-desktop:
+// https://github.com/lyswhut/lx-music-desktop/blob/master/src/renderer/utils/musicSdk/tx/qrcDecode.js
+//
+// QRC 使用的是非标准 DES 变体：S2[23]=15、S4[53]=10 两处与标准 DES 不同，
+// 不能替换成标准 DES 实现，否则解密结果错误。
 export const ENCRYPT = 1;
 export const DECRYPT = 0;
-const sbox = [[14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7, 0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8, 4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0, 15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13], [15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10, 3, 13, 4, 7, 15, 2, 8, 15, 12, 0, 1, 10, 6, 9, 11, 5, 0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15, 13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9], [10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8, 13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1, 13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7, 1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12], [7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15, 13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9, 10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4, 3, 15, 0, 6, 10, 10, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14], [2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9, 14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6, 4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14, 11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3], [12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11, 10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8, 9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6, 4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13], [4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1, 13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6, 1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2, 6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12], [13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7, 1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2, 7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8, 2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11]];
-function sboxBit(a) {
-    return (a & 32) | ((a & 31) >> 1) | ((a & 1) << 4);
-}
-function initialPermutation(inputData) {
-    const v0 = (inputData[0] | (inputData[1] << 8) | (inputData[2] << 16) | (inputData[3] << 24)) >>> 0;
-    const v1 = (inputData[4] | (inputData[5] << 8) | (inputData[6] << 16) | (inputData[7] << 24)) >>> 0;
-    const s0 = ((((v1 >> 6) & 1) << 31) |
-        (((v1 >> 14) & 1) << 30) |
-        (((v1 >> 22) & 1) << 29) |
-        (((v1 >> 30) & 1) << 28) |
-        (((v0 >> 6) & 1) << 27) |
-        (((v0 >> 14) & 1) << 26) |
-        (((v0 >> 22) & 1) << 25) |
-        (((v0 >> 30) & 1) << 24) |
-        (((v1 >> 4) & 1) << 23) |
-        (((v1 >> 12) & 1) << 22) |
-        (((v1 >> 20) & 1) << 21) |
-        (((v1 >> 28) & 1) << 20) |
-        (((v0 >> 4) & 1) << 19) |
-        (((v0 >> 12) & 1) << 18) |
-        (((v0 >> 20) & 1) << 17) |
-        (((v0 >> 28) & 1) << 16) |
-        (((v1 >> 2) & 1) << 15) |
-        (((v1 >> 10) & 1) << 14) |
-        (((v1 >> 18) & 1) << 13) |
-        (((v1 >> 26) & 1) << 12) |
-        (((v0 >> 2) & 1) << 11) |
-        (((v0 >> 10) & 1) << 10) |
-        (((v0 >> 18) & 1) << 9) |
-        (((v0 >> 26) & 1) << 8) |
-        (((v1 >> 0) & 1) << 7) |
-        (((v1 >> 8) & 1) << 6) |
-        (((v1 >> 16) & 1) << 5) |
-        (((v1 >> 24) & 1) << 4) |
-        (((v0 >> 0) & 1) << 3) |
-        (((v0 >> 8) & 1) << 2) |
-        (((v0 >> 16) & 1) << 1) |
-        ((v0 >> 24) & 1)) >>> 0;
-    const s1 = ((((v1 >> 7) & 1) << 31) |
-        (((v1 >> 15) & 1) << 30) |
-        (((v1 >> 23) & 1) << 29) |
-        (((v1 >> 31) & 1) << 28) |
-        (((v0 >> 7) & 1) << 27) |
-        (((v0 >> 15) & 1) << 26) |
-        (((v0 >> 23) & 1) << 25) |
-        (((v0 >> 31) & 1) << 24) |
-        (((v1 >> 5) & 1) << 23) |
-        (((v1 >> 13) & 1) << 22) |
-        (((v1 >> 21) & 1) << 21) |
-        (((v1 >> 29) & 1) << 20) |
-        (((v0 >> 5) & 1) << 19) |
-        (((v0 >> 13) & 1) << 18) |
-        (((v0 >> 21) & 1) << 17) |
-        (((v0 >> 29) & 1) << 16) |
-        (((v1 >> 3) & 1) << 15) |
-        (((v1 >> 11) & 1) << 14) |
-        (((v1 >> 19) & 1) << 13) |
-        (((v1 >> 27) & 1) << 12) |
-        (((v0 >> 3) & 1) << 11) |
-        (((v0 >> 11) & 1) << 10) |
-        (((v0 >> 19) & 1) << 9) |
-        (((v0 >> 27) & 1) << 8) |
-        (((v1 >> 1) & 1) << 7) |
-        (((v1 >> 9) & 1) << 6) |
-        (((v1 >> 17) & 1) << 5) |
-        (((v1 >> 25) & 1) << 4) |
-        (((v0 >> 1) & 1) << 3) |
-        (((v0 >> 9) & 1) << 2) |
-        (((v0 >> 17) & 1) << 1) |
-        ((v0 >> 25) & 1)) >>> 0;
-    return [s0, s1];
-}
-function inversePermutation(s0, s1) {
-    const data = new Uint8Array(8);
-    data[3] = ((((s1 >> 24) & 1) << 7) |
-        (((s0 >> 24) & 1) << 6) |
-        (((s1 >> 16) & 1) << 5) |
-        (((s0 >> 16) & 1) << 4) |
-        (((s1 >> 8) & 1) << 3) |
-        (((s0 >> 8) & 1) << 2) |
-        (((s1 >> 0) & 1) << 1) |
-        ((s0 >> 0) & 1));
-    data[2] = ((((s1 >> 25) & 1) << 7) |
-        (((s0 >> 25) & 1) << 6) |
-        (((s1 >> 17) & 1) << 5) |
-        (((s0 >> 17) & 1) << 4) |
-        (((s1 >> 9) & 1) << 3) |
-        (((s0 >> 9) & 1) << 2) |
-        (((s1 >> 1) & 1) << 1) |
-        ((s0 >> 1) & 1));
-    data[1] = ((((s1 >> 26) & 1) << 7) |
-        (((s0 >> 26) & 1) << 6) |
-        (((s1 >> 18) & 1) << 5) |
-        (((s0 >> 18) & 1) << 4) |
-        (((s1 >> 10) & 1) << 3) |
-        (((s0 >> 10) & 1) << 2) |
-        (((s1 >> 2) & 1) << 1) |
-        ((s0 >> 2) & 1));
-    data[0] = ((((s1 >> 27) & 1) << 7) |
-        (((s0 >> 27) & 1) << 6) |
-        (((s1 >> 19) & 1) << 5) |
-        (((s0 >> 19) & 1) << 4) |
-        (((s1 >> 11) & 1) << 3) |
-        (((s0 >> 11) & 1) << 2) |
-        (((s1 >> 3) & 1) << 1) |
-        ((s0 >> 3) & 1));
-    data[7] = ((((s1 >> 28) & 1) << 7) |
-        (((s0 >> 28) & 1) << 6) |
-        (((s1 >> 20) & 1) << 5) |
-        (((s0 >> 20) & 1) << 4) |
-        (((s1 >> 12) & 1) << 3) |
-        (((s0 >> 12) & 1) << 2) |
-        (((s1 >> 4) & 1) << 1) |
-        ((s0 >> 4) & 1));
-    data[6] = ((((s1 >> 29) & 1) << 7) |
-        (((s0 >> 29) & 1) << 6) |
-        (((s1 >> 21) & 1) << 5) |
-        (((s0 >> 21) & 1) << 4) |
-        (((s1 >> 13) & 1) << 3) |
-        (((s0 >> 13) & 1) << 2) |
-        (((s1 >> 5) & 1) << 1) |
-        ((s0 >> 5) & 1));
-    data[5] = ((((s1 >> 30) & 1) << 7) |
-        (((s0 >> 30) & 1) << 6) |
-        (((s1 >> 22) & 1) << 5) |
-        (((s0 >> 22) & 1) << 4) |
-        (((s1 >> 14) & 1) << 3) |
-        (((s0 >> 14) & 1) << 2) |
-        (((s1 >> 6) & 1) << 1) |
-        ((s0 >> 6) & 1));
-    data[4] = ((((s1 >> 31) & 1) << 7) |
-        (((s0 >> 31) & 1) << 6) |
-        (((s1 >> 23) & 1) << 5) |
-        (((s0 >> 23) & 1) << 4) |
-        (((s1 >> 15) & 1) << 3) |
-        (((s0 >> 15) & 1) << 2) |
-        (((s1 >> 7) & 1) << 1) |
-        ((s0 >> 7) & 1));
-    return data;
-}
-function f(state, key) {
-    const t1 = ((((state & 1) << 31) >>> 0) |
-        ((state & 0xf8000000) >>> 1) |
-        ((state & 0x1f800000) >>> 3) |
-        ((state & 0x01f80000) >>> 5) |
-        ((state & 0x001f8000) >>> 7)) >>> 0;
-    const t2 = (((state & 0x0001f800) << 15) |
-        ((state & 0x00001f80) << 13) |
-        ((state & 0x000001f8) << 11) |
-        ((state & 0x0000001f) << 9) |
-        ((state & 0x80000000) >>> 23)) >>> 0;
-    const k0 = ((t1 >>> 24) & 0xff) ^ key[0];
-    const k1 = ((t1 >>> 16) & 0xff) ^ key[1];
-    const k2 = ((t1 >>> 8) & 0xff) ^ key[2];
-    const k3 = ((t2 >>> 24) & 0xff) ^ key[3];
-    const k4 = ((t2 >>> 16) & 0xff) ^ key[4];
-    const k5 = ((t2 >>> 8) & 0xff) ^ key[5];
-    let st = ((sbox[0][sboxBit(k0 >> 2)] << 28) |
-        (sbox[1][sboxBit(((k0 & 0x03) << 4) | (k1 >> 4))] << 24) |
-        (sbox[2][sboxBit(((k1 & 0x0f) << 2) | (k2 >> 6))] << 20) |
-        (sbox[3][sboxBit(k2 & 0x3f)] << 16) |
-        (sbox[4][sboxBit(k3 >> 2)] << 12) |
-        (sbox[5][sboxBit(((k3 & 0x03) << 4) | (k4 >> 4))] << 8) |
-        (sbox[6][sboxBit(((k4 & 0x0f) << 2) | (k5 >> 6))] << 4) |
-        sbox[7][sboxBit(k5 & 0x3f)]) >>> 0;
-    return ((((st >> 16) & 1) << 31) |
-        (((st >> 25) & 1) << 30) |
-        (((st >> 12) & 1) << 29) |
-        (((st >> 11) & 1) << 28) |
-        (((st >> 3) & 1) << 27) |
-        (((st >> 20) & 1) << 26) |
-        (((st >> 4) & 1) << 25) |
-        (((st >> 15) & 1) << 24) |
-        (((st >> 31) & 1) << 23) |
-        (((st >> 17) & 1) << 22) |
-        (((st >> 9) & 1) << 21) |
-        (((st >> 6) & 1) << 20) |
-        (((st >> 27) & 1) << 19) |
-        (((st >> 14) & 1) << 18) |
-        (((st >> 1) & 1) << 17) |
-        (((st >> 22) & 1) << 16) |
-        (((st >> 30) & 1) << 15) |
-        (((st >> 24) & 1) << 14) |
-        (((st >> 8) & 1) << 13) |
-        (((st >> 18) & 1) << 12) |
-        (((st >> 0) & 1) << 11) |
-        (((st >> 5) & 1) << 10) |
-        (((st >> 29) & 1) << 9) |
-        (((st >> 23) & 1) << 8) |
-        (((st >> 13) & 1) << 7) |
-        (((st >> 19) & 1) << 6) |
-        (((st >> 2) & 1) << 5) |
-        (((st >> 26) & 1) << 4) |
-        (((st >> 10) & 1) << 3) |
-        (((st >> 21) & 1) << 2) |
-        (((st >> 28) & 1) << 1) |
-        ((st >> 7) & 1)) >>> 0;
-}
-export function desCrypt(inputData, key) {
-    let [s0, s1] = initialPermutation(inputData);
-    for (let idx = 0; idx < 15; idx++) {
-        const prevS1 = s1;
-        s1 = (f(s1, key[idx]) ^ s0) >>> 0;
-        s0 = prevS1;
-    }
-    s0 = (f(s1, key[15]) ^ s0) >>> 0;
-    return inversePermutation(s0, s1);
-}
+const sbox = [
+    [
+        14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7, 0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12,
+        11, 9, 5, 3, 8, 4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0, 15, 12, 8, 2, 4, 9, 1,
+        7, 5, 11, 3, 14, 10, 0, 6, 13,
+    ],
+    [
+        15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10, 3, 13, 4, 7, 15, 2, 8, 15, 12, 0, 1,
+        10, 6, 9, 11, 5, 0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15, 13, 8, 10, 1, 3, 15,
+        4, 2, 11, 6, 7, 12, 0, 5, 14, 9,
+    ],
+    [
+        10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8, 13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5,
+        14, 12, 11, 15, 1, 13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7, 1, 10, 13, 0, 6,
+        9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12,
+    ],
+    [
+        7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15, 13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2,
+        12, 1, 10, 14, 9, 10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4, 3, 15, 0, 6, 10,
+        10, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14,
+    ],
+    [
+        2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9, 14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15,
+        10, 3, 9, 8, 6, 4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14, 11, 8, 12, 7, 1, 14,
+        2, 13, 6, 15, 0, 9, 10, 4, 5, 3,
+    ],
+    [
+        12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11, 10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13,
+        14, 0, 11, 3, 8, 9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6, 4, 3, 2, 12, 9, 5,
+        15, 10, 11, 14, 1, 7, 6, 0, 8, 13,
+    ],
+    [
+        4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1, 13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5,
+        12, 2, 15, 8, 6, 1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2, 6, 11, 13, 8, 1, 4,
+        10, 7, 9, 5, 0, 15, 14, 2, 3, 12,
+    ],
+    [
+        13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7, 1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6,
+        11, 0, 14, 9, 2, 7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8, 2, 1, 14, 7, 4, 10,
+        8, 13, 15, 12, 9, 0, 3, 5, 6, 11,
+    ],
+];
 const KEY_RND_SHIFT = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1];
 const KEY_PERM_C = [
-    56, 48, 40, 32, 24, 16, 8, 0,
-    57, 49, 41, 33, 25, 17, 9, 1,
-    58, 50, 42, 34, 26, 18, 10, 2,
-    59, 51, 43, 35
+    56, 48, 40, 32, 24, 16, 8, 0, 57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18, 10, 2, 59,
+    51, 43, 35,
 ];
 const KEY_PERM_D = [
-    62, 54, 46, 38, 30, 22, 14, 6,
-    61, 53, 45, 37, 29, 21, 13, 5,
-    60, 52, 44, 36, 28, 20, 12, 4,
-    27, 19, 11, 3
+    62, 54, 46, 38, 30, 22, 14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 60, 52, 44, 36, 28, 20, 12, 4,
+    27, 19, 11, 3,
 ];
 const KEY_COMPRESSION = [
-    13, 16, 10, 23, 0, 4, 2, 27, 14, 5, 20, 9,
-    22, 18, 11, 3, 25, 7, 15, 6, 26, 19, 12, 1,
-    40, 51, 30, 36, 46, 54, 29, 39, 50, 44, 32, 47,
-    43, 48, 38, 55, 33, 52, 45, 41, 49, 35, 28, 31
+    13, 16, 10, 23, 0, 4, 2, 27, 14, 5, 20, 9, 22, 18, 11, 3, 25, 7, 15, 6, 26, 19, 12, 1, 40, 51,
+    30, 36, 46, 54, 29, 39, 50, 44, 32, 47, 43, 48, 38, 55, 33, 52, 45, 41, 49, 35, 28, 31,
 ];
-export function keySchedule(key, mode) {
-    const schedule = Array.from({ length: 16 }, () => [0, 0, 0, 0, 0, 0]);
-    const v0 = (key[0] | (key[1] << 8) | (key[2] << 16) | (key[3] << 24)) >>> 0;
-    const v1 = (key[4] | (key[5] << 8) | (key[6] << 16) | (key[7] << 24)) >>> 0;
-    let c = 0;
-    for (let i = 0; i < KEY_PERM_C.length; i++) {
-        const b = KEY_PERM_C[i];
-        const bit = (b < 32 ? ((v0 >>> (31 - b)) & 1) : ((v1 >>> (63 - b)) & 1));
-        c = (c | (bit << (31 - i))) >>> 0;
+const bitnum = (a, b, c) => (((a[((b / 32) | 0) * 4 + 3 - (((b % 32) / 8) | 0)] >>> (7 - (b % 8))) & 1) << c) >>> 0;
+const bitnumIntr = (a, b, c) => (((a >>> (31 - b)) & 1) << c) >>> 0;
+const bitnumIntl = (a, b, c) => ((((a << b) >>> 0) & 0x80000000) >>> 0) >>> c;
+const sboxBit = (a) => (a & 32) | ((a & 31) >>> 1) | ((a & 1) << 4);
+const initialPermutation = (input) => {
+    const s0 = (bitnum(input, 57, 31) | bitnum(input, 49, 30) | bitnum(input, 41, 29) | bitnum(input, 33, 28) |
+        bitnum(input, 25, 27) | bitnum(input, 17, 26) | bitnum(input, 9, 25) | bitnum(input, 1, 24) |
+        bitnum(input, 59, 23) | bitnum(input, 51, 22) | bitnum(input, 43, 21) | bitnum(input, 35, 20) |
+        bitnum(input, 27, 19) | bitnum(input, 19, 18) | bitnum(input, 11, 17) | bitnum(input, 3, 16) |
+        bitnum(input, 61, 15) | bitnum(input, 53, 14) | bitnum(input, 45, 13) | bitnum(input, 37, 12) |
+        bitnum(input, 29, 11) | bitnum(input, 21, 10) | bitnum(input, 13, 9) | bitnum(input, 5, 8) |
+        bitnum(input, 63, 7) | bitnum(input, 55, 6) | bitnum(input, 47, 5) | bitnum(input, 39, 4) |
+        bitnum(input, 31, 3) | bitnum(input, 23, 2) | bitnum(input, 15, 1) | bitnum(input, 7, 0)) >>> 0;
+    const s1 = (bitnum(input, 56, 31) | bitnum(input, 48, 30) | bitnum(input, 40, 29) | bitnum(input, 32, 28) |
+        bitnum(input, 24, 27) | bitnum(input, 16, 26) | bitnum(input, 8, 25) | bitnum(input, 0, 24) |
+        bitnum(input, 58, 23) | bitnum(input, 50, 22) | bitnum(input, 42, 21) | bitnum(input, 34, 20) |
+        bitnum(input, 26, 19) | bitnum(input, 18, 18) | bitnum(input, 10, 17) | bitnum(input, 2, 16) |
+        bitnum(input, 60, 15) | bitnum(input, 52, 14) | bitnum(input, 44, 13) | bitnum(input, 36, 12) |
+        bitnum(input, 28, 11) | bitnum(input, 20, 10) | bitnum(input, 12, 9) | bitnum(input, 4, 8) |
+        bitnum(input, 62, 7) | bitnum(input, 54, 6) | bitnum(input, 46, 5) | bitnum(input, 38, 4) |
+        bitnum(input, 30, 3) | bitnum(input, 22, 2) | bitnum(input, 14, 1) | bitnum(input, 6, 0)) >>> 0;
+    return [s0, s1];
+};
+const inversePermutation = (s0, s1) => {
+    const out = new Uint8Array(8);
+    out[3] = (bitnumIntr(s1, 7, 7) | bitnumIntr(s0, 7, 6) | bitnumIntr(s1, 15, 5) | bitnumIntr(s0, 15, 4) |
+        bitnumIntr(s1, 23, 3) | bitnumIntr(s0, 23, 2) | bitnumIntr(s1, 31, 1) | bitnumIntr(s0, 31, 0)) & 0xff;
+    out[2] = (bitnumIntr(s1, 6, 7) | bitnumIntr(s0, 6, 6) | bitnumIntr(s1, 14, 5) | bitnumIntr(s0, 14, 4) |
+        bitnumIntr(s1, 22, 3) | bitnumIntr(s0, 22, 2) | bitnumIntr(s1, 30, 1) | bitnumIntr(s0, 30, 0)) & 0xff;
+    out[1] = (bitnumIntr(s1, 5, 7) | bitnumIntr(s0, 5, 6) | bitnumIntr(s1, 13, 5) | bitnumIntr(s0, 13, 4) |
+        bitnumIntr(s1, 21, 3) | bitnumIntr(s0, 21, 2) | bitnumIntr(s1, 29, 1) | bitnumIntr(s0, 29, 0)) & 0xff;
+    out[0] = (bitnumIntr(s1, 4, 7) | bitnumIntr(s0, 4, 6) | bitnumIntr(s1, 12, 5) | bitnumIntr(s0, 12, 4) |
+        bitnumIntr(s1, 20, 3) | bitnumIntr(s0, 20, 2) | bitnumIntr(s1, 28, 1) | bitnumIntr(s0, 28, 0)) & 0xff;
+    out[7] = (bitnumIntr(s1, 3, 7) | bitnumIntr(s0, 3, 6) | bitnumIntr(s1, 11, 5) | bitnumIntr(s0, 11, 4) |
+        bitnumIntr(s1, 19, 3) | bitnumIntr(s0, 19, 2) | bitnumIntr(s1, 27, 1) | bitnumIntr(s0, 27, 0)) & 0xff;
+    out[6] = (bitnumIntr(s1, 2, 7) | bitnumIntr(s0, 2, 6) | bitnumIntr(s1, 10, 5) | bitnumIntr(s0, 10, 4) |
+        bitnumIntr(s1, 18, 3) | bitnumIntr(s0, 18, 2) | bitnumIntr(s1, 26, 1) | bitnumIntr(s0, 26, 0)) & 0xff;
+    out[5] = (bitnumIntr(s1, 1, 7) | bitnumIntr(s0, 1, 6) | bitnumIntr(s1, 9, 5) | bitnumIntr(s0, 9, 4) |
+        bitnumIntr(s1, 17, 3) | bitnumIntr(s0, 17, 2) | bitnumIntr(s1, 25, 1) | bitnumIntr(s0, 25, 0)) & 0xff;
+    out[4] = (bitnumIntr(s1, 0, 7) | bitnumIntr(s0, 0, 6) | bitnumIntr(s1, 8, 5) | bitnumIntr(s0, 8, 4) |
+        bitnumIntr(s1, 16, 3) | bitnumIntr(s0, 16, 2) | bitnumIntr(s1, 24, 1) | bitnumIntr(s0, 24, 0)) & 0xff;
+    return out;
+};
+const desF = (state, key) => {
+    const t1 = (bitnumIntl(state, 31, 0) | (((state & 0xf0000000) >>> 0) >>> 1) | bitnumIntl(state, 4, 5) |
+        bitnumIntl(state, 3, 6) | (((state & 0x0f000000) >>> 0) >>> 3) | bitnumIntl(state, 8, 11) |
+        bitnumIntl(state, 7, 12) | (((state & 0x00f00000) >>> 0) >>> 5) | bitnumIntl(state, 12, 17) |
+        bitnumIntl(state, 11, 18) | (((state & 0x000f0000) >>> 0) >>> 7) | bitnumIntl(state, 16, 23)) >>> 0;
+    const t2 = (bitnumIntl(state, 15, 0) | (((state & 0x0000f000) << 15) >>> 0) | bitnumIntl(state, 20, 5) |
+        bitnumIntl(state, 19, 6) | (((state & 0x00000f00) << 13) >>> 0) | bitnumIntl(state, 24, 11) |
+        bitnumIntl(state, 23, 12) | (((state & 0x000000f0) << 11) >>> 0) | bitnumIntl(state, 28, 17) |
+        bitnumIntl(state, 27, 18) | (((state & 0x0000000f) << 9) >>> 0) | bitnumIntl(state, 0, 23)) >>> 0;
+    const lrgstate = [
+        (t1 >>> 24) & 0xff,
+        (t1 >>> 16) & 0xff,
+        (t1 >>> 8) & 0xff,
+        (t2 >>> 24) & 0xff,
+        (t2 >>> 16) & 0xff,
+        (t2 >>> 8) & 0xff,
+    ];
+    for (let i = 0; i < 6; i++)
+        lrgstate[i] ^= key[i];
+    const s = ((sbox[0][sboxBit(lrgstate[0] >>> 2)] << 28) |
+        (sbox[1][sboxBit(((lrgstate[0] & 0x03) << 4) | (lrgstate[1] >>> 4))] << 24) |
+        (sbox[2][sboxBit(((lrgstate[1] & 0x0f) << 2) | (lrgstate[2] >>> 6))] << 20) |
+        (sbox[3][sboxBit(lrgstate[2] & 0x3f)] << 16) |
+        (sbox[4][sboxBit(lrgstate[3] >>> 2)] << 12) |
+        (sbox[5][sboxBit(((lrgstate[3] & 0x03) << 4) | (lrgstate[4] >>> 4))] << 8) |
+        (sbox[6][sboxBit(((lrgstate[4] & 0x0f) << 2) | (lrgstate[5] >>> 6))] << 4) |
+        sbox[7][sboxBit(lrgstate[5] & 0x3f)]) >>> 0;
+    return (bitnumIntl(s, 15, 0) | bitnumIntl(s, 6, 1) | bitnumIntl(s, 19, 2) | bitnumIntl(s, 20, 3) |
+        bitnumIntl(s, 28, 4) | bitnumIntl(s, 11, 5) | bitnumIntl(s, 27, 6) | bitnumIntl(s, 16, 7) |
+        bitnumIntl(s, 0, 8) | bitnumIntl(s, 14, 9) | bitnumIntl(s, 22, 10) | bitnumIntl(s, 25, 11) |
+        bitnumIntl(s, 4, 12) | bitnumIntl(s, 17, 13) | bitnumIntl(s, 30, 14) | bitnumIntl(s, 9, 15) |
+        bitnumIntl(s, 1, 16) | bitnumIntl(s, 7, 17) | bitnumIntl(s, 23, 18) | bitnumIntl(s, 13, 19) |
+        bitnumIntl(s, 31, 20) | bitnumIntl(s, 26, 21) | bitnumIntl(s, 2, 22) | bitnumIntl(s, 8, 23) |
+        bitnumIntl(s, 18, 24) | bitnumIntl(s, 12, 25) | bitnumIntl(s, 29, 26) | bitnumIntl(s, 5, 27) |
+        bitnumIntl(s, 21, 28) | bitnumIntl(s, 10, 29) | bitnumIntl(s, 3, 30) | bitnumIntl(s, 24, 31)) >>> 0;
+};
+export function desCrypt(input, schedule) {
+    let [s0, s1] = initialPermutation(input);
+    for (let i = 0; i < 15; i++) {
+        const prev = s1;
+        s1 = (desF(s1, schedule[i]) ^ s0) >>> 0;
+        s0 = prev;
     }
+    s0 = (desF(s1, schedule[15]) ^ s0) >>> 0;
+    return inversePermutation(s0, s1);
+}
+export function keySchedule(key, mode) {
+    const schedule = Array.from({ length: 16 }, () => new Uint8Array(6));
+    let c = 0;
     let d = 0;
-    for (let i = 0; i < KEY_PERM_D.length; i++) {
-        const b = KEY_PERM_D[i];
-        const bit = (b < 32 ? ((v0 >>> (31 - b)) & 1) : ((v1 >>> (63 - b)) & 1));
-        d = (d | (bit << (31 - i))) >>> 0;
+    for (let i = 0; i < 28; i++) {
+        c = (c | bitnum(key, KEY_PERM_C[i], 31 - i)) >>> 0;
+        d = (d | bitnum(key, KEY_PERM_D[i], 31 - i)) >>> 0;
     }
     for (let i = 0; i < 16; i++) {
-        const shift = KEY_RND_SHIFT[i];
-        c = (((c << shift) | (c >>> (28 - shift))) & 0xfffffff0) >>> 0;
-        d = (((d << shift) | (d >>> (28 - shift))) & 0xfffffff0) >>> 0;
+        c = ((((c << KEY_RND_SHIFT[i]) >>> 0) | (c >>> (28 - KEY_RND_SHIFT[i]))) & 0xfffffff0) >>> 0;
+        d = ((((d << KEY_RND_SHIFT[i]) >>> 0) | (d >>> (28 - KEY_RND_SHIFT[i]))) & 0xfffffff0) >>> 0;
         const togen = mode === DECRYPT ? 15 - i : i;
-        for (let j = 0; j < 6; j++) {
-            schedule[togen][j] = 0;
-        }
         for (let j = 0; j < 24; j++) {
-            const bit = (c >>> (31 - KEY_COMPRESSION[j])) & 1;
-            schedule[togen][Math.floor(j / 8)] |= bit << (7 - (j % 8));
+            schedule[togen][(j / 8) | 0] |= bitnumIntr(c, KEY_COMPRESSION[j], 7 - (j % 8));
         }
         for (let j = 24; j < 48; j++) {
-            const bit = (d >>> (31 - (KEY_COMPRESSION[j] - 27))) & 1;
-            schedule[togen][Math.floor(j / 8)] |= bit << (7 - (j % 8));
+            schedule[togen][(j / 8) | 0] |= bitnumIntr(d, KEY_COMPRESSION[j] - 27, 7 - (j % 8));
         }
     }
     return schedule;
@@ -280,10 +187,9 @@ export function tripleDesKeySetup(key, mode) {
         keySchedule(key.subarray(0, 8), DECRYPT),
     ];
 }
-export function tripleDesCrypt(data, key) {
+export function tripleDesCrypt(data, schedules) {
     let res = new Uint8Array(data);
-    for (let i = 0; i < 3; i++) {
-        res = desCrypt(res, key[i]);
-    }
+    for (const schedule of schedules)
+        res = desCrypt(res, schedule);
     return res;
 }

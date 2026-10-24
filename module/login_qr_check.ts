@@ -1,12 +1,10 @@
 import { request, requestCgi, type ApiResponse } from "../util/request.js";
 import { getGtk, getStableGuid } from "../util/crypto.js";
 import {
-  cookieToJson,
   cookieToString,
   mergeLoginPayloadCookies,
   parseSetCookie,
 } from "../util/cookie.js";
-import { getMobileSession, registerMobileSession } from "../util/mobile_qr_session.js";
 
 /**
  * 轮询检查二维码登录状态.
@@ -206,56 +204,8 @@ export default async function login_qr_check(
     }
     const guid = query.guid || getStableGuid(qrcodeID);
 
-    // 1. 确保后台 MQTT 会话已启动
-    let session = getMobileSession(qrcodeID);
-    if (!session) {
-      try {
-        registerMobileSession(qrcodeID);
-      } catch {}
-      session = getMobileSession(qrcodeID);
-    }
-
-    // 2. 优先检查实时会话事件
-    if (session && session.code === 200) {
-      const cookieObj = cookieToJson(session.cookieStr);
-      cookieObj.guid = cookieObj.guid || guid;
-      return {
-        status: 200,
-        body: {
-          code: 200,
-          message: "登录成功",
-          uin: session.uin || "",
-          musickey: session.musickey || "",
-          nickname: session.nickname || "",
-          avatarUrl: session.avatarUrl || "",
-          guid,
-          cookieStr: cookieToString(cookieObj),
-        },
-      };
-    }
-
-    if (session && session.code === 802) {
-      return {
-        status: 200,
-        body: { code: 802, message: session.message || "已扫码，等待确认" },
-      };
-    }
-
-    if (session && session.code === 800) {
-      return {
-        status: 200,
-        body: { code: 800, message: session.message || "二维码已过期，请刷新" },
-      };
-    }
-
-    if (session && session.code === 803) {
-      return {
-        status: 200,
-        body: { code: 803, message: session.message || "用户取消授权" },
-      };
-    }
-
-    // 3. 兜底轮询 CheckQRCode CGI 状态
+    // 移动端扫码统一走 CheckQRCode 轮询。早期版本额外开了 MQTT/WS 实时会话，
+    // 但那会把整个 mqtt/ws 依赖树带进包里；CGI 轮询已覆盖同一流程。
     try {
       const cgiRes = await req(
         "music.login.LoginServer",
@@ -311,10 +261,7 @@ export default async function login_qr_check(
 
     return {
       status: 200,
-      body: {
-        code: session?.code || 801,
-        message: session?.message || "等待 QQ 音乐 App 扫码",
-      },
+      body: { code: 801, message: "等待 QQ 音乐 App 扫码" },
     };
   }
 
