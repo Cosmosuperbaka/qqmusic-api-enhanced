@@ -122,11 +122,31 @@ import {
   hash33,      // 经典 hash33 哈希计算
   getGtk,      // 从 skey 计算 g_tk
   getGuid,     // 生成设备与会话 32 位 GUID
+  getStableGuid, // 由账号/二维码会话派生稳定设备 GUID
+  mergeLoginPayloadCookies, // 合并登录/续期响应中的凭证字段
   request,     // 统一网络调度器 (自动判断 cgi 或 raw http)
   requestCgi,  // 请求 musicu.fcg / musics.fcg
   requestRaw,  // 原始 fetch 包装
 } from "qqmusic-api-enhanced";
 ```
+
+---
+
+## 发布
+
+版本号在 `package.json`；发布由 GitHub Actions 自动完成：
+
+1. 修改 `package.json` 的 `version`，提交并推送。
+2. 打标签并推送：`git tag v1.0.7 && git push origin v1.0.7`。
+3. `.github/workflows/publish.yml` 会安装依赖、构建、测试，并通过 npm Trusted Publishing（OIDC）执行 `npm publish --provenance`；不需要 `NPM_TOKEN`，也不需要 OTP。
+
+首次配置（npm 控制台，一次性）：
+
+- 打开 npmjs.com 上 `qqmusic-api-enhanced` 的 Settings → Trusted Publisher。
+- 选择 GitHub Actions，填写仓库 `owner/repo`、workflow 文件名 `publish.yml`、Environment 留空。
+- workflow 文件名必须与 npm 侧逐字一致；如果 npm 侧填了 Environment，要同步把它加到 workflow 的 job 上。
+
+也可以在 Actions 页面手动 `workflow_dispatch` 重跑；tag 触发时会先校验 tag 与 `package.json` 版本一致，不一致直接失败，避免发错版本。
 
 ---
 
