@@ -18,6 +18,14 @@
   ],
   "author": "BakaGame",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cosmosuperbaka/qqmusic-api-enhanced.git"
+  },
+  "homepage": "https://github.com/Cosmosuperbaka/qqmusic-api-enhanced#readme",
+  "bugs": {
+    "url": "https://github.com/Cosmosuperbaka/qqmusic-api-enhanced/issues"
+  },
   "files": [
     "module",
     "util",
