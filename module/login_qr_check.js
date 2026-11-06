@@ -205,7 +205,8 @@ async function checkQq(query, fetchImpl, cgi) {
         return { status: 200, body: { code: 803, message: "已在手机上取消登录" } };
     }
     if (parsed.status !== "success") {
-        return failure("ptqrlogin", "QQ 扫码状态无法识别", { detail: { raw: text.slice(0, 120) } });
+        // 只留回调开头的状态码：后面的字段可能带昵称，不进日志。
+        return failure("ptqrlogin", "QQ 扫码状态无法识别", { detail: { head: text.slice(0, 20) } });
     }
     if (!parsed.url) {
         return failure("ptqrlogin", "无法解析登录回调地址");

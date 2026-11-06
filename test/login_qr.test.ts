@@ -310,6 +310,55 @@ const redirect = (location: string, setCookie: string[] = [], status = 302) => {
   return res;
 };
 
+describe("QQ 音乐 App 扫码（会话回收）", () => {
+  it("到期后转为过期并断开连接，保留期满回收状态", async () => {
+    const f = makeFactory();
+    ensureMobileQrSession("qr-ttl", { createSocket: f.createSocket, ttlMs: 20 });
+    await Bun.sleep(30);
+    expect(getMobileQrState("qr-ttl")?.code).toBe(800);
+    expect(f.sockets[0]!.closed).toBe(true);
+    await Bun.sleep(30);
+    expect(getMobileQrState("qr-ttl")).toBeUndefined();
+  });
+
+  it("成功后无人取走的凭证到保留期也会被回收", async () => {
+    const f = makeFactory();
+    const deps = {
+      createSocket: f.createSocket,
+      ttlMs: 20,
+      requestCgi: (async () => ({
+        status: 200,
+        body: { musickey: "real_key", musicid: 123456 },
+        cookie: [],
+      })) as any,
+    };
+    ensureMobileQrSession("qr-unclaimed", deps);
+    const socket = f.sockets[0]!;
+    socket.onopen?.({});
+    socket.push(connack());
+    socket.push(
+      event("cookies", {
+        cookies: { qqmusic_uin: { value: "123456" }, qqmusic_key: { value: "tmp_key" } },
+      })
+    );
+    await Bun.sleep(5);
+    expect(getMobileQrState("qr-unclaimed")?.code).toBe(200);
+    await Bun.sleep(50);
+    expect(getMobileQrState("qr-unclaimed")).toBeUndefined();
+  });
+
+  it("同时在线的订阅数有上限，超出时不再新开连接", () => {
+    const f = makeFactory();
+    for (let index = 0; index < 128; index += 1) {
+      ensureMobileQrSession(`qr-cap-${index}`, { createSocket: f.createSocket });
+    }
+    const overflow = ensureMobileQrSession("qr-cap-overflow", { createSocket: f.createSocket });
+    expect(overflow).toMatchObject({ code: 500, stage: "capacity" });
+    expect(f.sockets).toHaveLength(128);
+    expect(getMobileQrState("qr-cap-overflow")).toBeUndefined();
+  });
+});
+
 describe("QQ 网页扫码", () => {
   const SUCCESS =
     "ptuiCB('0','0','https://ptlogin2.graph.qq.com/check_sig?ptsigx=abc','0','登录成功！','昵称');";

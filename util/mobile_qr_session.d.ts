@@ -3,7 +3,7 @@ import { requestCgi } from "./request.js";
  * QQ 音乐 App 扫码的实时会话。
  *
  * 状态只经 `wss://mu.y.qq.com` 的 MQTT 5 推送下发（`CheckQRCode` CGI 任何阶段都回 40000），
- * 所以每个二维码在首次轮询时开一条订阅连接，状态落在内存里，后续轮询读取即可。
+ * 所以每个二维码在创建时开一条订阅连接，状态落在内存里，后续轮询读取即可。
  */
 export interface MobileQrState {
     /** 801 等待 / 802 已扫码待确认 / 800 过期 / 803 用户取消 / 200 成功 / 500 协议失败 */
@@ -36,6 +36,8 @@ export interface MobileQrDeps {
     createSocket?: WebSocketFactory;
     requestCgi?: CgiRequester;
     now?: () => number;
+    /** 二维码有效期，测试用；缺省 {@link SESSION_TTL_MS}。 */
+    ttlMs?: number;
 }
 /** 取某个二维码当前的会话状态；还没有会话时返回 undefined。 */
 export declare function getMobileQrState(qrcodeID: string): MobileQrState | undefined;

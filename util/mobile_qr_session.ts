@@ -15,7 +15,7 @@ import { getStableGuid } from "./crypto.js";
  * QQ 音乐 App 扫码的实时会话。
  *
  * 状态只经 `wss://mu.y.qq.com` 的 MQTT 5 推送下发（`CheckQRCode` CGI 任何阶段都回 40000），
- * 所以每个二维码在首次轮询时开一条订阅连接，状态落在内存里，后续轮询读取即可。
+ * 所以每个二维码在创建时开一条订阅连接，状态落在内存里，后续轮询读取即可。
  */
 
 export interface MobileQrState {
@@ -50,10 +50,16 @@ export interface MobileQrDeps {
   createSocket?: WebSocketFactory;
   requestCgi?: CgiRequester;
   now?: () => number;
+  /** 二维码有效期，测试用；缺省 {@link SESSION_TTL_MS}。 */
+  ttlMs?: number;
 }
 
 const MQTT_HOST = "wss://mu.y.qq.com";
 const SESSION_TTL_MS = 5 * 60_000;
+/** 过期后终态再留一个 TTL 供轮询读取，之后连同内存里的凭证一起回收。 */
+const SESSION_RETAIN_FACTOR = 2;
+/** 每个二维码占一条到上游的长连接，同时在线数必须有上限。 */
+const MAX_LIVE_SESSIONS = 128;
 const KEEP_ALIVE_SECONDS = 45;
 const MAX_REDIRECTS = 3;
 const CONNACK_MOVED = new Set([156, 157]);
@@ -97,15 +103,24 @@ export function resetMobileQrSessions(): void {
  */
 export function ensureMobileQrSession(qrcodeID: string, deps: MobileQrDeps = {}): MobileQrState {
   const now = deps.now ?? Date.now;
+  const ttlMs = deps.ttlMs ?? SESSION_TTL_MS;
+  const retainMs = ttlMs * SESSION_RETAIN_FACTOR;
   const existing = sessions.get(qrcodeID);
   if (existing) {
-    const alive = now() - existing.state.createdAt < SESSION_TTL_MS;
-    if (alive || existing.state.code === 200) return existing.state;
+    if (now() - existing.state.createdAt < retainMs) return existing.state;
     dropMobileQrSession(qrcodeID);
   }
   // 顺手回收别的过期会话，避免无人轮询的二维码一直占着连接。
   for (const [id, entry] of sessions) {
-    if (now() - entry.state.createdAt > SESSION_TTL_MS * 2) dropMobileQrSession(id);
+    if (now() - entry.state.createdAt >= retainMs) dropMobileQrSession(id);
+  }
+  if (sessions.size >= MAX_LIVE_SESSIONS) {
+    return {
+      code: 500,
+      message: "QQ 音乐扫码通道繁忙，请稍后重试",
+      stage: "capacity",
+      createdAt: now(),
+    };
   }
 
   const state: MobileQrState = { code: 801, message: "等待 QQ 音乐 App 扫码", createdAt: now() };
@@ -115,7 +130,8 @@ export function ensureMobileQrSession(qrcodeID: string, deps: MobileQrDeps = {})
   let closed = false;
   let redirects = 0;
 
-  const close = () => {
+  const closeConnection = () => {
+    if (closed) return;
     closed = true;
     if (pingTimer) clearInterval(pingTimer);
     if (ttlTimer) clearTimeout(ttlTimer);
@@ -126,10 +142,25 @@ export function ensureMobileQrSession(qrcodeID: string, deps: MobileQrDeps = {})
       socket?.close();
     } catch {}
   };
-  sessions.set(qrcodeID, { state, close });
-  // 无人继续轮询的二维码不能一直占着连接：到期自动释放（unref，不拖住进程退出）。
-  ttlTimer = setTimeout(() => dropMobileQrSession(qrcodeID), SESSION_TTL_MS);
+  // 到期先断开连接并把状态标成过期，否则轮询会给失效的二维码重建会话、一直显示等待。
+  ttlTimer = setTimeout(() => {
+    if (state.code === 801 || state.code === 802) {
+      state.code = 800;
+      state.message = "二维码已过期，请刷新";
+    }
+    closeConnection();
+  }, ttlMs);
   (ttlTimer as { unref?: () => void }).unref?.();
+  // 回收定时器不随连接关闭取消：成功后无人取走的凭证也不能留在内存里。
+  const reapTimer = setTimeout(() => dropMobileQrSession(qrcodeID), retainMs);
+  (reapTimer as { unref?: () => void }).unref?.();
+  sessions.set(qrcodeID, {
+    state,
+    close: () => {
+      clearTimeout(reapTimer);
+      closeConnection();
+    },
+  });
 
   const fail = (stage: string, message: string, upstreamCode?: number) => {
     if (state.code === 200 || state.code === 800 || state.code === 803) return;
@@ -193,7 +224,7 @@ export function ensureMobileQrSession(qrcodeID: string, deps: MobileQrDeps = {})
     state.musickey = realKey;
     state.expiresAt = merged.expiresAt;
     state.cookieStr = cookieToString(cookieObj);
-    close();
+    closeConnection();
   };
 
   const handlePublish = (packet: MqttPublish) => {
@@ -206,11 +237,11 @@ export function ensureMobileQrSession(qrcodeID: string, deps: MobileQrDeps = {})
     } else if (type === "timeout") {
       state.code = 800;
       state.message = "二维码已过期，请刷新";
-      close();
+      closeConnection();
     } else if (type === "canceled") {
       state.code = 803;
       state.message = "已在 QQ 音乐 App 内取消登录";
-      close();
+      closeConnection();
     } else if (type === "cookies") {
       void finishWithCookies(packet);
     }
