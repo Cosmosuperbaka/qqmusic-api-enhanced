@@ -1,6 +1,7 @@
 import { request, type ApiResponse } from "../util/request.js";
 import { getStableGuid, hash33 } from "../util/crypto.js";
 import { parseSetCookie } from "../util/cookie.js";
+import { ensureMobileQrSession } from "../util/mobile_qr_session.js";
 
 /**
  * 获取登录二维码 (QQ / 微信 / 移动端App).
@@ -106,6 +107,13 @@ export default async function login_qr_create(
 
   const qrcodeID = cgiRes.body?.qrcodeID;
   const guid = query.guid || (qrcodeID ? getStableGuid(qrcodeID) : "");
+
+  // 扫码状态只走 MQTT 推送：创建二维码时就开始订阅，避免用户先扫、轮询后到而漏掉“已扫码”事件。
+  if (qrcodeID && cgiRes.body?.code === 0) {
+    try {
+      ensureMobileQrSession(qrcodeID);
+    } catch {}
+  }
 
   return {
     status: cgiRes.status,
