@@ -65,8 +65,11 @@ export default async function login_status(
   const mergedCookies = { ...cookieObj, ...parseSetCookie(cgiRes.cookie || []) };
   const merged = mergeLoginPayloadCookies(mergedCookies, cgiRes.body);
   const userData = data.user || data.userInfo || data;
+  // 现行响应把资料放在 `info`、顶层没有 uin；凭证失效时是不带资料的 `{ code: 1000 }`。
+  // 账号号已由登录写进 Cookie，这里只需要确认上游认可这份凭证并给出了资料。
+  const profile = (data.info || {}) as any;
   const isLogin =
-    Boolean(data.code === 0 && (userData.uin || userData.encryptUin)) ||
+    Boolean(data.code === 0 && (userData.uin || userData.encryptUin || profile.nick || profile.logo)) ||
     Boolean(data.code === undefined && userData.uin);
 
   if (userData.uin) {
@@ -75,8 +78,8 @@ export default async function login_status(
     uin = String(userData.encryptUin).trim();
   }
 
-  let nickname = userData.nick || userData.nickname || "";
-  let avatarUrl: string | undefined = userData.headurl || userData.avatar;
+  let nickname = userData.nick || userData.nickname || profile.nick || "";
+  let avatarUrl: string | undefined = userData.headurl || userData.avatar || profile.logo || undefined;
 
   // 并行获取用户主页资料与 VIP 信息（避免串行多次公网 RPC 导致进房等待过久）
   const needDetail = Boolean(uin && (!nickname || !avatarUrl));

@@ -3,7 +3,7 @@ import login_refresh_mod from "../module/login_refresh.js";
 import login_status_mod from "../module/login_status.js";
 import { cookieToJson, mergeLoginPayloadCookies } from "../util/cookie.js";
 import { getStableGuid } from "../util/crypto.js";
-import { createOption } from "../util/option.js";
+import { buildComm, createOption } from "../util/option.js";
 
 describe("登录凭证续期", () => {
   it("mergeLoginPayloadCookies 合并嵌套字段、别名与过期时间", () => {
@@ -158,5 +158,64 @@ describe("登录凭证续期", () => {
     );
     expect(res.body.isLogin).toBe(true);
     expect(cookieToJson(res.body.cookieStr).rotated).toBe("1");
+  });
+
+  it("现行响应：资料在 info 里、顶层没有 uin 也算已登录，昵称头像取自 info", async () => {
+    const mockReq = async (module: string) => {
+      if (module === "music.UserInfo.userInfoServer") {
+        return {
+          status: 200,
+          body: { code: 0, errMsg: "OK", info: { nick: "宝宝", logo: "https://q/a.jpg" } },
+          cookie: [],
+        };
+      }
+      return { status: 200, body: { code: 0, data: {} }, cookie: [] };
+    };
+    const res = await login_status_mod(
+      { cookie: "uin=1152921504752111234; qm_keyst=W_X_key" },
+      mockReq as any
+    );
+    expect(res.body.isLogin).toBe(true);
+    expect(res.body.uin).toBe("1152921504752111234");
+    expect(res.body.nickname).toBe("宝宝");
+    expect(res.body.avatarUrl).toBe("https://q/a.jpg");
+  });
+
+  it("凭证失效时上游回 code 1000，不算已登录", async () => {
+    const mockReq = async () => ({ status: 200, body: { code: 1000 }, cookie: [] });
+    const res = await login_status_mod({ cookie: "uin=1; qm_keyst=expired" }, mockReq as any);
+    expect(res.body.isLogin).toBe(false);
+  });
+
+  it("code 0 但没有任何资料时不算已登录", async () => {
+    const mockReq = async () => ({ status: 200, body: { code: 0, info: {} }, cookie: [] });
+    const res = await login_status_mod({ cookie: "uin=1; qm_keyst=k" }, mockReq as any);
+    expect(res.body.isLogin).toBe(false);
+  });
+
+  it("微信账号号超过安全整数：优先取字符串字段，绝不写回丢精度的 number", () => {
+    const withString: Record<string, string> = {};
+    mergeLoginPayloadCookies(withString, {
+      musicid: 1152921504752111000,
+      str_musicid: "1152921504752111234",
+      musickey: "W_X_key",
+    });
+    expect(withString.uin).toBe("1152921504752111234");
+
+    const numberOnly: Record<string, string> = { uin: "1152921504752111234" };
+    mergeLoginPayloadCookies(numberOnly, { musicid: 1152921504752111000 });
+    expect(numberOnly.uin).toBe("1152921504752111234");
+
+    const safe: Record<string, string> = {};
+    mergeLoginPayloadCookies(safe, { musicid: 123456 });
+    expect(safe.uin).toBe("123456");
+  });
+
+  it("超过安全整数的账号号在 comm 里按字符串传", () => {
+    const big = buildComm(createOption({ cookie: "uin=1152921504752111234" }));
+    expect(big.uin).toBe("1152921504752111234");
+    const small = buildComm(createOption({ cookie: "uin=123456" }));
+    expect(small.uin).toBe(123456);
+    expect(buildComm(createOption({})).uin).toBe(0);
   });
 });

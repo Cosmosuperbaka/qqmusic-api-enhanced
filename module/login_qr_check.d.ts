@@ -29,14 +29,21 @@ export declare function classifyLoginCode(code: number | undefined): {
     reason: LoginFailureReason;
     message: string;
 };
-/** 简易 Cookie 罐：处理空值/过期即删除，避免把已清除的 Cookie 当成有效值回传。 */
+/**
+ * 按域名隔离的 Cookie 罐，行为对齐浏览器。
+ *
+ * 登录网关会在同一次响应里给 `graph.qq.com` 下发 p_skey，再把 `qq.com` 的同名项清掉；
+ * 不分域名合并时，清除指令会连真票据一起删掉，后面的 OAuth 就没有 g_tk 可算。
+ */
 export declare class CookieJar {
-    private readonly values;
+    private readonly entries;
     constructor(initial?: Record<string, string>);
-    apply(setCookies: string[]): void;
-    get(key: string): string;
-    toObject(): Record<string, string>;
-    header(): string;
+    apply(setCookies: string[], requestHost?: string): void;
+    /** 目标主机能看到的 Cookie；同名时取域最具体的一项。 */
+    private visible;
+    get(name: string, host?: string): string;
+    toObject(host?: string): Record<string, string>;
+    header(host?: string): string;
 }
 /** 解析 ptqrlogin 的 `ptuiCB('码','…','URL','…','提示','昵称')` 回调。 */
 export declare function parsePtqrloginText(text: string): {

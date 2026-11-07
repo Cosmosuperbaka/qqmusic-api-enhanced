@@ -50,6 +50,19 @@ const readText = (value) => {
     return "";
 };
 /**
+ * 读账号号：微信账号是 19 位数字，超过 2^53，JSON 里的 number 已经丢了精度，
+ * 只有字符串字段才可信。写回被四舍五入的号，会让后续校验与续期都对不上账号。
+ */
+const readAccountId = (...values) => {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim() && value.trim() !== "0")
+            return value.trim();
+        if (typeof value === "number" && Number.isSafeInteger(value) && value > 0)
+            return String(value);
+    }
+    return "";
+};
+/**
  * 把登录/续期响应里的凭证字段并入 Cookie。
  *
  * QQ 音乐不同登录方式返回的字段位置不一致（顶层、`data` 里、Set-Cookie 里），
@@ -65,7 +78,7 @@ export function mergeLoginPayloadCookies(cookieObj, payload) {
         cookieObj.qqmusic_key = musickey;
         cookieObj.musickey = musickey;
     }
-    const musicid = readText(source.musicid ?? source.uin ?? source.str_musicid);
+    const musicid = readAccountId(source.str_musicid, source.musicid, source.uin);
     if (musicid) {
         cookieObj.uin = musicid;
         cookieObj.qqmusic_uin = musicid;

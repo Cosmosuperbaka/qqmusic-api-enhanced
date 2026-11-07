@@ -7,6 +7,9 @@ const HTTP_TIMEOUT_MS = 12_000;
 /** 微信 lp 长轮询最长约 25s；留一点余量，超时按“还在等待”处理。 */
 const WX_LONG_POLL_TIMEOUT_MS = 30_000;
 const MAX_REDIRECT_HOPS = 4;
+const LOGIN_HOST = "ssl.ptlogin2.qq.com";
+const OAUTH_HOST = "graph.qq.com";
+const MUSIC_HOST = "u.y.qq.com";
 /** 业务码 → 失败原因。码表来自各登录入口的公开实现与实测（无效授权码返回 104400）。 */
 export function classifyLoginCode(code) {
     switch (code) {
@@ -37,41 +40,64 @@ const failure = (stage, message, extra = {}) => ({
         detail: extra.detail,
     },
 });
-/** 简易 Cookie 罐：处理空值/过期即删除，避免把已清除的 Cookie 当成有效值回传。 */
+/** Cookie 域是否覆盖目标主机：空域是构造时给的初始值，对所有主机生效。 */
+const domainCovers = (domain, host) => !domain || !host || host === domain || host.endsWith(`.${domain}`);
+/**
+ * 按域名隔离的 Cookie 罐，行为对齐浏览器。
+ *
+ * 登录网关会在同一次响应里给 `graph.qq.com` 下发 p_skey，再把 `qq.com` 的同名项清掉；
+ * 不分域名合并时，清除指令会连真票据一起删掉，后面的 OAuth 就没有 g_tk 可算。
+ */
 export class CookieJar {
-    values = new Map();
+    entries = new Map();
     constructor(initial = {}) {
-        for (const [key, value] of Object.entries(initial))
-            this.values.set(key, value);
+        for (const [name, value] of Object.entries(initial)) {
+            this.entries.set(`${name}\0`, { name, value, domain: "" });
+        }
     }
-    apply(setCookies) {
+    apply(setCookies, requestHost = "") {
         for (const line of setCookies) {
             const segments = line.split(";").map((part) => part.trim());
             const pair = segments[0] ?? "";
             const idx = pair.indexOf("=");
             if (idx <= 0)
                 continue;
-            const key = pair.slice(0, idx).trim();
+            const name = pair.slice(0, idx).trim();
             const value = pair.slice(idx + 1).trim();
             const attrs = segments.slice(1).map((part) => part.toLowerCase());
             const maxAge = attrs.find((part) => part.startsWith("max-age="));
             const expires = attrs.find((part) => part.startsWith("expires="));
+            const declared = attrs.find((part) => part.startsWith("domain="));
+            const domain = (declared?.slice(7) ?? requestHost).replace(/^\./, "");
+            const key = `${name}\0${domain}`;
             const expired = (maxAge !== undefined && Number(maxAge.slice(8)) <= 0) ||
                 (expires !== undefined && Date.parse(expires.slice(8)) < Date.now());
             if (!value || expired)
-                this.values.delete(key);
+                this.entries.delete(key);
             else
-                this.values.set(key, value);
+                this.entries.set(key, { name, value, domain });
         }
     }
-    get(key) {
-        return this.values.get(key) ?? "";
+    /** 目标主机能看到的 Cookie；同名时取域最具体的一项。 */
+    visible(host) {
+        const out = new Map();
+        for (const entry of this.entries.values()) {
+            if (!domainCovers(entry.domain, host))
+                continue;
+            const current = out.get(entry.name);
+            if (!current || entry.domain.length >= current.domain.length)
+                out.set(entry.name, entry);
+        }
+        return out;
     }
-    toObject() {
-        return Object.fromEntries(this.values);
+    get(name, host = "") {
+        return this.visible(host).get(name)?.value ?? "";
     }
-    header() {
-        return cookieToString(this.toObject());
+    toObject(host = "") {
+        return Object.fromEntries([...this.visible(host)].map(([name, entry]) => [name, entry.value]));
+    }
+    header(host = "") {
+        return cookieToString(this.toObject(host));
     }
 }
 const withTimeout = (ms) => AbortSignal.timeout(ms);
@@ -174,12 +200,12 @@ async function checkQq(query, fetchImpl, cgi) {
         const checkRes = await fetchImpl(checkUrl, {
             headers: {
                 Referer: "https://xui.ptlogin2.qq.com/",
-                Cookie: jar.header(),
+                Cookie: jar.header(LOGIN_HOST),
                 "User-Agent": BROWSER_UA,
             },
             signal: withTimeout(HTTP_TIMEOUT_MS),
         });
-        jar.apply(checkRes.headers.getSetCookie?.() || []);
+        jar.apply(checkRes.headers.getSetCookie?.() || [], LOGIN_HOST);
         text = await checkRes.text();
         if (checkRes.status >= 400) {
             return failure("ptqrlogin", `QQ 登录网关返回 HTTP ${checkRes.status}`, {
@@ -216,12 +242,13 @@ async function checkQq(query, fetchImpl, cgi) {
     let hops = 0;
     try {
         while (hopUrl && hops < MAX_REDIRECT_HOPS) {
+            const hopHost = new URL(hopUrl).hostname;
             const sigRes = await fetchImpl(hopUrl, {
                 redirect: "manual",
-                headers: { Cookie: jar.header(), "User-Agent": BROWSER_UA },
+                headers: { Cookie: jar.header(hopHost), "User-Agent": BROWSER_UA },
                 signal: withTimeout(HTTP_TIMEOUT_MS),
             });
-            jar.apply(sigRes.headers.getSetCookie?.() || []);
+            jar.apply(sigRes.headers.getSetCookie?.() || [], hopHost);
             const next = sigRes.headers.get("Location");
             hopUrl =
                 next && sigRes.status >= 300 && sigRes.status < 400 ? new URL(next, hopUrl).href : undefined;
@@ -231,7 +258,7 @@ async function checkQq(query, fetchImpl, cgi) {
     catch (error) {
         return failure("check_sig", `换取 QQ 登录票据失败: ${String(error)}`);
     }
-    const pSkey = jar.get("p_skey");
+    const pSkey = jar.get("p_skey", OAUTH_HOST);
     if (!pSkey) {
         return failure("check_sig", "QQ 登录票据缺少 p_skey，登录态未建立", {
             detail: { cookieNames: Object.keys(jar.toObject()).sort().join(",") },
@@ -261,7 +288,7 @@ async function checkQq(query, fetchImpl, cgi) {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                Cookie: jar.header(),
+                Cookie: jar.header(OAUTH_HOST),
                 "User-Agent": BROWSER_UA,
                 // 授权接口按浏览器表单提交校验来源：带上与官方页面一致的 Referer / Origin。
                 Referer: "https://graph.qq.com/oauth2.0/show",
@@ -287,8 +314,8 @@ async function checkQq(query, fetchImpl, cgi) {
     }
     // 3. 将 OAuth code 换取 QQ 音乐正式凭据（只保留音乐侧凭证，不带 ptlogin 的一堆 Cookie）。
     const loginCgiRes = await cgi("QQConnectLogin.LoginServer", "QQLogin", { code }, {
-        cookie: jar.toObject(),
-        headers: { Cookie: jar.header() },
+        cookie: jar.toObject(MUSIC_HOST),
+        headers: { Cookie: jar.header(MUSIC_HOST) },
     });
     return finishCgiLogin(loginCgiRes, guid, "qqlogin", "登录成功");
 }

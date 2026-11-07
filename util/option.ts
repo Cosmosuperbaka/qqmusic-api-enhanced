@@ -100,6 +100,13 @@ export function createOption(
   };
 }
 
+/** comm 里的 uin：超过安全整数的账号号（微信）只能按字符串传，转 number 会被四舍五入。 */
+const commUin = (uin: string): number | string => {
+  const numeric = Number(uin);
+  if (!numeric) return 0;
+  return Number.isSafeInteger(numeric) ? numeric : uin;
+};
+
 /**
  * 构建 CGI 请求所需的通用 comm 参数对象.
  */
@@ -123,7 +130,7 @@ export function buildComm(options: NormalizedOptions): Record<string, any> {
       ct: 19,
       cv: 2201,
       guid: options.guid,
-      uin: Number(options.uin) || 0,
+      uin: commUin(options.uin),
     };
   } else {
     // Web 平台
@@ -132,7 +139,7 @@ export function buildComm(options: NormalizedOptions): Record<string, any> {
       cv: 4747474,
       platform: "yqq.json",
       chid: "0",
-      uin: Number(options.uin) || 0,
+      uin: commUin(options.uin),
       g_tk: gTk,
       g_tk_new_20200303: gTk,
       format: "json",

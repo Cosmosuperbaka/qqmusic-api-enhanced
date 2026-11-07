@@ -93,8 +93,8 @@ export default async function login_refresh(
   };
 
   // 1. QQ 互联网页扫码：用旧 musickey 直接换新 key。签名与非签名各试一次，
-  //    不同部署/线路对 musics.fcg 的签名要求不一致。
-  for (const sign of [true, false]) {
+  //    不同部署/线路对 musics.fcg 的签名要求不一致。微信账号不走这条线。
+  for (const sign of loginType === "1" ? [] : [true, false]) {
     try {
       const refreshed = await tryRefresh(
         "QQConnectLogin.LoginServer",
@@ -130,7 +130,8 @@ export default async function login_refresh(
         refresh_token: query.refresh_token || cookieObj.refresh_token || "",
         refresh_key: query.refresh_key || cookieObj.refresh_key || "",
         access_token: cookieObj.access_token || "",
-        musicid: Number(uin) || 0,
+        // 微信账号号超过安全整数：number 字段会被四舍五入，只传字符串字段。
+        musicid: Number.isSafeInteger(Number(uin)) ? Number(uin) : 0,
         str_musicid: uin,
         musickey,
         loginMode: 2,

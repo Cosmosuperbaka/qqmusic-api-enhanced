@@ -389,6 +389,37 @@ describe("QQ 网页扫码", () => {
     expect(jar.toObject()).toEqual({ keep: "2" });
   });
 
+  it("CookieJar 按域隔离：清除 qq.com 的同名项不影响 graph.qq.com 的真票据", () => {
+    const jar = new CookieJar({ qrsig: "sig" });
+    jar.apply(
+      [
+        "p_skey=REAL; Path=/; Domain=graph.qq.com; Secure",
+        "p_skey=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=qq.com",
+        "pt4_token=T; Path=/; Domain=graph.qq.com",
+        "RK=rk; Path=/; Domain=.qq.com",
+        "local=1; Path=/",
+      ],
+      "ssl.ptlogin2.graph.qq.com"
+    );
+    expect(jar.get("p_skey", "graph.qq.com")).toBe("REAL");
+    // 子域能看到父域的 Cookie，看不到兄弟域或仅限更深子域的 Cookie。
+    expect(jar.toObject("graph.qq.com")).toEqual({
+      qrsig: "sig",
+      p_skey: "REAL",
+      pt4_token: "T",
+      RK: "rk",
+    });
+    expect(jar.toObject("u.y.qq.com")).toEqual({ qrsig: "sig", RK: "rk" });
+    expect(jar.header("ssl.ptlogin2.graph.qq.com")).toContain("local=1");
+  });
+
+  it("CookieJar 同名时取域最具体的一项", () => {
+    const jar = new CookieJar();
+    jar.apply(["a=parent; Domain=qq.com", "a=child; Domain=graph.qq.com"]);
+    expect(jar.get("a", "graph.qq.com")).toBe("child");
+    expect(jar.get("a", "y.qq.com")).toBe("parent");
+  });
+
   it("授权码与跳转概括只保留可入日志的字段", () => {
     expect(extractAuthCode("https://y.qq.com/portal/wx_redirect.html?code=ABC123&state=state")).toBe(
       "ABC123"
@@ -403,7 +434,14 @@ describe("QQ 网页扫码", () => {
   it("完整成功链路：check_sig 跟随跳转、authorize 带来源头、QQLogin 产出凭证", async () => {
     const { fn, calls } = scriptedFetch([
       () => textResponse(SUCCESS, ["uin=o123; Path=/", "pt4_token=t; Path=/"]),
-      () => redirect("https://graph.qq.com/oauth2.0/login_jump", ["p_skey=PSKEY; Path=/"]),
+      () =>
+        redirect("https://graph.qq.com/oauth2.0/login_jump", [
+          // 与线上 check_sig 的真实顺序一致：先发票据，再清 qq.com 的同名项。
+          "p_skey_forbid=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=graph.qq.com",
+          "p_skey=PSKEY; Path=/; Domain=graph.qq.com; Secure",
+          "pt_oauth_token=tok; Path=/; Domain=graph.qq.com",
+          "p_skey=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=qq.com",
+        ]),
       () => textResponse(""),
       () => redirect("https://y.qq.com/portal/wx_redirect.html?login_type=1&code=AUTHCODE&state=state"),
     ]);
@@ -453,7 +491,7 @@ describe("QQ 网页扫码", () => {
   it("授权换码失败返回 500 协议失败并带阶段和跳转概括，而不是当作成功", async () => {
     const { fn } = scriptedFetch([
       () => textResponse(SUCCESS),
-      () => textResponse("", ["p_skey=P"]),
+      () => textResponse("", ["p_skey=P; Domain=graph.qq.com"]),
       () => redirect("https://graph.qq.com/oauth2.0/show?which=Login&display=pc", [], 302),
     ]);
     const res = await login_qr_check({ type: "qq", qrsig: "s", ptqrtoken: 1 }, undefined, {
@@ -478,7 +516,7 @@ describe("QQ 网页扫码", () => {
   it("QQLogin 返回空 musickey 时不再谎报登录成功，并按业务码归类", async () => {
     const { fn } = scriptedFetch([
       () => textResponse(SUCCESS),
-      () => textResponse("", ["p_skey=P"]),
+      () => textResponse("", ["p_skey=P; Domain=graph.qq.com"]),
       () => redirect("https://y.qq.com/x?code=C1"),
     ]);
     const cgi = (async () => ({
