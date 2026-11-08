@@ -75,6 +75,7 @@ export function ensureMobileQrSession(qrcodeID, deps = {}) {
     let pingTimer;
     let ttlTimer;
     let closed = false;
+    let exchanging = false;
     let redirects = 0;
     const closeConnection = () => {
         if (closed)
@@ -145,7 +146,14 @@ export function ensureMobileQrSession(qrcodeID, deps = {}) {
         catch (error) {
             return fail("login-request", `QQ 音乐凭证换取请求失败: ${String(error)}`);
         }
-        const realKey = readText(loginData.musickey) || key;
+        // 推送里的 key 只是一次性换票凭据，拿它直接请求会被判未登录（code 1000）。
+        // 换取失败必须如实上报，不能退回临时 key 冒充成功——否则调用方随后的状态校验必然失败，
+        // 玩家只会看到笼统的“校验未通过”，上游码也丢了。
+        const realKey = readText(loginData.musickey);
+        if (!realKey) {
+            const rawCode = Number(loginData.code);
+            return fail("login", "QQ 音乐未签发登录凭证", Number.isFinite(rawCode) ? rawCode : undefined);
+        }
         const realUin = readText(loginData.musicid) || uin;
         const cookieObj = {
             uin: realUin,
@@ -155,7 +163,7 @@ export function ensureMobileQrSession(qrcodeID, deps = {}) {
             qqmusic_key: realKey,
             musickey: realKey,
             tmeAppID: "qqmusic",
-            tmeLoginType: readText(loginData.loginType) || "6",
+            tmeLoginType: readText(loginData.loginType) || readText(cookies.tmeLoginType?.value) || "6",
         };
         for (const [name, item] of Object.entries(cookies)) {
             if (item && typeof item.value === "string" && !cookieObj[name])
@@ -191,6 +199,10 @@ export function ensureMobileQrSession(qrcodeID, deps = {}) {
             closeConnection();
         }
         else if (type === "cookies") {
+            // 一次性 token 只能换一次：QoS 1 重投或重复推送再换必然失败，还会把已成功的凭证覆盖掉。
+            if (exchanging || state.code === 200)
+                return;
+            exchanging = true;
             void finishWithCookies(packet);
         }
     };

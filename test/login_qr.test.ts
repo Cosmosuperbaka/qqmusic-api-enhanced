@@ -279,6 +279,66 @@ describe("QQ 音乐 App 扫码（MQTT 会话）", () => {
     const res = await login_qr_check({ type: "mobile", qrcodeID: "qr-nows" }, undefined, deps);
     expect(res.body).toMatchObject({ code: 500, stage: "connect" });
   });
+
+  it("换票没拿到 musickey 时如实失败并带业务码，不拿推送里的临时 key 冒充成功", async () => {
+    const f = makeFactory();
+    const deps = {
+      mobile: {
+        createSocket: f.createSocket,
+        requestCgi: (async () => ({ status: 200, body: { code: 104604 }, cookie: [] })) as any,
+      },
+    };
+    const poll = () => login_qr_check({ type: "mobile", qrcodeID: "qr-nokey" }, undefined, deps);
+    await poll();
+    const socket = f.sockets[0]!;
+    socket.onopen?.({});
+    socket.push(connack());
+    socket.push(
+      event("cookies", {
+        cookies: { qqmusic_uin: { value: "123456" }, qqmusic_key: { value: "tmp_key" } },
+      })
+    );
+    await Bun.sleep(5);
+    const res = await poll();
+    expect(res.body).toMatchObject({
+      code: 500,
+      stage: "login",
+      reason: "rate_limited",
+      upstreamCode: 104604,
+    });
+    expect(res.body.cookieStr).toBeUndefined();
+  });
+
+  it("同一二维码重复推送凭证只换一次票，已成功的凭证不被后到的失败覆盖", async () => {
+    const f = makeFactory();
+    let calls = 0;
+    const deps = {
+      createSocket: f.createSocket,
+      requestCgi: (async () => {
+        calls += 1;
+        // 一次性 token：第二次换必然失败。
+        return calls === 1
+          ? { status: 200, body: { code: 0, musickey: "real_key", musicid: 123456 }, cookie: [] }
+          : { status: 200, body: { code: 1000 }, cookie: [] };
+      }) as any,
+    };
+    ensureMobileQrSession("qr-dup", deps);
+    const socket = f.sockets[0]!;
+    socket.onopen?.({});
+    socket.push(connack());
+    const cookiesEvent = event("cookies", {
+      cookies: { qqmusic_uin: { value: "123456" }, qqmusic_key: { value: "tmp_key" } },
+    });
+    socket.push(cookiesEvent);
+    socket.push(cookiesEvent);
+    await Bun.sleep(5);
+    socket.push(cookiesEvent);
+    await Bun.sleep(5);
+    expect(calls).toBe(1);
+    const state = getMobileQrState("qr-dup")!;
+    expect(state.code).toBe(200);
+    expect(cookieToJson(state.cookieStr).qm_keyst).toBe("real_key");
+  });
 });
 
 const headersOf = (setCookie: string[] = [], location?: string) => {

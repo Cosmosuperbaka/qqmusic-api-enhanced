@@ -466,7 +466,15 @@ async function checkMobile(
   if (state.code === 500) {
     // 失败后释放连接；调用方若重新轮询会得到一条新会话。
     dropMobileQrSession(qrcodeID);
-    return failure(state.stage ?? "mobile", state.message, { upstreamCode: state.upstreamCode });
+    // 换票阶段带回的是业务码，按统一码表区分限流 / 设备上限 / 账号受限，其余阶段是通道问题。
+    const classified =
+      state.stage === "login" && state.upstreamCode !== undefined
+        ? classifyLoginCode(state.upstreamCode)
+        : undefined;
+    return failure(state.stage ?? "mobile", classified?.message ?? state.message, {
+      reason: classified?.reason,
+      upstreamCode: state.upstreamCode,
+    });
   }
   // 800/803 的终态保留到会话 TTL：立刻丢弃会让下一轮轮询重新建会话、又回到“等待”。
   return { status: 200, body: { code: state.code, message: state.message } };
